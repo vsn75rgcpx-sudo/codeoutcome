@@ -6,7 +6,11 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "references": [{ "path": "../shared" }],
+  "references": [
+    { "path": "../shared" },
+    { "path": "../database" },
+    { "path": "../git-tracker" }
+  ],
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

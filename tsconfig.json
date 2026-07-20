@@ -2,11 +2,11 @@
   "files": [],
   "references": [
     { "path": "./packages/shared" },
+    { "path": "./packages/database" },
+    { "path": "./packages/git-tracker" },
     { "path": "./packages/core" },
     { "path": "./packages/adapters/claude-code" },
     { "path": "./packages/adapters/codex" },
-    { "path": "./packages/database" },
-    { "path": "./packages/git-tracker" },
     { "path": "./apps/cli" }
   ]
 }

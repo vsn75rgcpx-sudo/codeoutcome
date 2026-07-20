@@ -68,6 +68,12 @@ importers:
 
   packages/core:
     dependencies:
+      '@agentledger/database':
+        specifier: workspace:*
+        version: link:../database
+      '@agentledger/git-tracker':
+        specifier: workspace:*
+        version: link:../git-tracker
       '@agentledger/shared':
         specifier: workspace:*
         version: link:../shared

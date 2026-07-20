@@ -1,19 +1,18 @@
 # AgentLedger
 
-AgentLedger is a local-first CLI for reviewing Claude Code and OpenAI Codex
-programming sessions. Phase one reads existing JSONL logs, normalizes session
-metadata, stores that metadata in a local SQLite database, and reports session
-and token-usage summaries.
+AgentLedger is a local-first CLI that imports Claude Code and OpenAI Codex
+session metadata into SQLite and reports token usage. It reads JSONL logs
+incrementally, keeps the two provider parsers independent, and stores only the
+metadata needed for accounting.
 
-The project is intentionally small at this stage: there is no web app, desktop
-app, VS Code plugin, cloud sync, or remote telemetry.
+There is no web app, desktop app, VS Code plugin, cloud sync, telemetry, or
+network pricing lookup in the current phase.
 
 ## Requirements
 
-- macOS, Linux, or another Node.js-compatible environment
-- Node.js 22.13 or newer
+- Node.js 22.13 or newer (for the built-in SQLite runtime)
 - pnpm 11 or newer
-- Git (recommended for repository and branch enrichment)
+- Git (used read-only for repository, branch, and sanitized remote metadata)
 
 ## Install and develop
 
@@ -25,72 +24,101 @@ pnpm test
 pnpm build
 ```
 
-Run the CLI from the workspace:
+Run the CLI from this workspace:
 
 ```sh
 pnpm cli doctor
-pnpm cli sessions
-pnpm cli usage
+pnpm cli import --dry-run
+pnpm cli import --provider all
+pnpm cli sessions --limit 10
+pnpm cli usage --weekly
 ```
 
-After `pnpm build`, the compiled executable is at
-`apps/cli/dist/index.js`. Published or linked packages expose it as the
-`agentledger` command.
+After `pnpm build`, the executable is `apps/cli/dist/index.js`. A linked or
+published package exposes the same program as `agentledger`.
 
 ## Commands
 
-- `agentledger doctor` checks Git, expected log paths, the AgentLedger SQLite
-  destination, and read/write permissions. It does not create a database or
-  alter user configuration.
-- `agentledger sessions` scans logs read-only, updates the local metadata
-  database, and lists normalized sessions.
-- `agentledger usage` scans logs read-only and aggregates tokens by provider and
-  model.
-- Add `--json` to `sessions` or `usage` for machine-readable output.
+```text
+agentledger doctor [--json]
+agentledger import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
+agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
+agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
+```
 
-Default input paths:
+`doctor` is diagnostic only: it does not create the database, run migrations,
+or modify user configuration. `import` is the only command that reads source
+logs and writes imported metadata. `sessions` and `usage` query the persisted
+database.
 
-- Claude Code: `~/.claude/projects`
-- Codex: `~/.codex/sessions`
+Default paths:
 
-Default database: `~/.agentledger/agentledger.sqlite`
+- Claude Code logs: `~/.claude/projects`
+- Codex logs: `~/.codex/sessions`
+- macOS database: `~/Library/Application Support/AgentLedger/agentledger.sqlite`
+- Linux database: `$XDG_DATA_HOME/agentledger/agentledger.sqlite`, or
+  `~/.local/share/agentledger/agentledger.sqlite`
 
-Override these paths without changing the original tools:
+Path overrides:
 
 ```sh
-AGENTLEDGER_CLAUDE_LOG_DIR=/path/to/claude/logs pnpm cli sessions
-AGENTLEDGER_CODEX_LOG_DIR=/path/to/codex/logs pnpm cli sessions
-AGENTLEDGER_DATA_DIR=/path/to/local/data pnpm cli sessions
+AGENTLEDGER_CLAUDE_LOG_DIR=/path/to/claude/logs pnpm cli import
+AGENTLEDGER_CODEX_LOG_DIR=/path/to/codex/logs pnpm cli import
+AGENTLEDGER_DATA_DIR=/path/to/local/data pnpm cli import
 ```
+
+Durations such as `7d`, `24h`, and `4w` are supported by `--since`. Date
+filtering and report buckets use UTC.
 
 ## Privacy principles
 
-- Claude Code and Codex logs are opened read-only. AgentLedger never edits,
-  moves, or deletes original logs.
-- The SQLite database stores normalized metadata only. Prompt text, response
-  text, source code, tool payloads, and environment variables are not retained.
-- Stored metadata can include local paths (`workingDirectory`,
-  `repositoryPath`, and `sourceFile`). Keep the database private if those paths
-  are sensitive.
-- There is no network upload or telemetry in phase one.
-- Repository fixtures are synthetic and redacted. Real user logs must never be
-  copied into this repository.
-- Unknown fields, malformed lines, and missing values degrade to safe defaults
-  instead of exposing raw records.
+- Source logs are opened read-only. AgentLedger never edits, moves, truncates,
+  or deletes files under `~/.claude`, `~/.codex`, or configured log roots.
+- Prompt text, response text, source code, tool payloads, shell environment
+  variables, API keys, cookies, and access tokens are not placed in normalized
+  objects or SQLite.
+- Local paths are stored because they are required for incremental imports and
+  repository grouping. CLI output replaces the current home directory with
+  `~`.
+- Git remotes have credentials, query strings, and fragments removed before
+  storage.
+- There are no network requests or remote telemetry. Pricing uses only the
+  bundled versioned local catalog.
+- All committed fixtures are synthetic and redacted. Never copy real user logs
+  into this repository.
+- A malformed file is isolated to that provider and file; errors never include
+  the source record body.
 
-## Current support
+The SQLite database is private local data and may still reveal project names,
+paths, models, branches, timestamps, and token counts. Protect it accordingly.
 
-The Claude Code and Codex adapters are separate packages and understand a
-conservative subset of their JSONL metadata and token-usage shapes. Log formats
-are not guaranteed APIs, so unknown versions may produce partial metadata. Cost
-is reported only when a source log contains a usable estimate; AgentLedger does
-not guess prices.
+## Current format support
 
-SQLite currently retains previously indexed session metadata even if a source
-log later disappears. Duplicate provider/session IDs are updated in place.
+The Claude Code adapter supports project JSONL records containing session
+metadata on top-level `user`/`assistant` objects and token counts under
+`message.usage` (with conservative aliases for older field names).
 
-See [Architecture](docs/architecture.md) for package boundaries and the next
-engineering steps.
+The Codex adapter supports rollout JSONL records including `session_meta`,
+`turn_context`, and `event_msg` records whose token data is under
+`payload.info.total_token_usage` or `payload.info.last_token_usage`. It also
+accepts conservative older `usage` locations.
+
+Both adapters tolerate unknown fields, missing metadata, malformed complete
+lines, and a truncated final line. Very large files are processed line by line
+from the last verified byte checkpoint instead of being loaded into memory.
+
+See [Usage accounting](docs/usage-accounting.md) for exact token semantics,
+incremental-import behavior, and known risks. See
+[Architecture](docs/architecture.md) for module boundaries.
+
+## Cost status
+
+The bundled catalog is `local-unpriced-v1`, updated 2026-07-20. It intentionally
+contains no enabled model prices because no versioned rate source has been
+verified for this repository. Costs are therefore `unavailable` unless a
+supported source event contains a complete cost estimate. A future verified
+local catalog will be labeled `estimated`; it will not be presented as billed
+cost.
 
 ## License
 

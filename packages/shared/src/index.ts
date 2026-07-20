@@ -1,31 +1,71 @@
-import { createReadStream } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream, realpathSync } from "node:fs";
+import { readdir, realpath, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
-import { createInterface } from "node:readline";
 
 export type Provider = "claude-code" | "codex";
+export type ProviderSelection = Provider | "all";
+export type UsageEventType = "incremental" | "cumulative";
 
 export interface Session {
   id: string;
   provider: Provider;
+  providerSessionId: string;
   model: string;
   startedAt: string | null;
   endedAt: string | null;
   workingDirectory: string | null;
   repositoryPath: string | null;
+  repositoryName: string | null;
+  remoteUrl: string | null;
   branch: string | null;
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
   estimatedCost: number | null;
   sourceFile: string;
+  sourceFileHash: string;
+  importedAt: string | null;
+}
+
+export interface UsageEvent {
+  id: string;
+  sessionId: string;
+  sourceFile: string;
+  sourceOffset: number;
+  eventTime: string | null;
+  eventType: UsageEventType;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  estimatedCost: number | null;
+}
+
+export interface ParseFileOptions {
+  startOffset?: number;
+  providerSessionIdHint?: string;
+}
+
+export interface ParsedLogFile {
+  session: Session;
+  usageEvents: UsageEvent[];
+  processedBytes: number;
+  fileSize: number;
+  malformedLines: number;
+  truncated: boolean;
+  format: string;
 }
 
 export interface SessionAdapter {
   readonly provider: Provider;
   readonly logRoot: string;
+  readonly supportedFormats: readonly string[];
   discoverSourceFiles(): Promise<string[]>;
-  parseFile(sourceFile: string): Promise<Session>;
+  parseFile(
+    sourceFile: string,
+    options?: ParseFileOptions,
+  ): Promise<ParsedLogFile>;
 }
 
 export interface ParseWarning {
@@ -37,6 +77,18 @@ export interface ParseWarning {
 export interface CollectionResult {
   sessions: Session[];
   warnings: ParseWarning[];
+}
+
+export interface JsonlRecordPosition {
+  startOffset: number;
+  endOffset: number;
+}
+
+export interface JsonlReadResult {
+  processedBytes: number;
+  fileSize: number;
+  malformedLines: number;
+  truncated: boolean;
 }
 
 export type JsonRecord = Record<string, unknown>;
@@ -103,62 +155,272 @@ export function updateTimestampBounds(
   };
 }
 
+function isWithinRoot(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+}
+
+export async function canonicalizePath(candidate: string): Promise<string> {
+  const absolute = path.resolve(candidate);
+  try {
+    return await realpath(absolute);
+  } catch {
+    return absolute;
+  }
+}
+
 export async function discoverJsonlFiles(root: string): Promise<string[]> {
-  const discovered: string[] = [];
+  const absoluteRoot = path.resolve(root);
+  let canonicalRoot: string;
+  try {
+    canonicalRoot = await realpath(absoluteRoot);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const visitedDirectories = new Set<string>();
+  const discovered = new Set<string>();
 
   async function visit(directory: string): Promise<void> {
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") {
-        return;
-      }
-      throw error;
+    const canonicalDirectory = await realpath(directory);
+    if (
+      visitedDirectories.has(canonicalDirectory) ||
+      !isWithinRoot(canonicalRoot, canonicalDirectory)
+    ) {
+      return;
     }
+    visitedDirectories.add(canonicalDirectory);
 
+    const entries = await readdir(canonicalDirectory, { withFileTypes: true });
     for (const entry of entries) {
-      const entryPath = path.join(directory, entry.name);
+      const entryPath = path.join(canonicalDirectory, entry.name);
       if (entry.isDirectory()) {
         await visit(entryPath);
-      } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-        discovered.push(entryPath);
+        continue;
+      }
+
+      if (entry.isSymbolicLink()) {
+        let target: string;
+        try {
+          target = await realpath(entryPath);
+        } catch {
+          continue;
+        }
+        if (!isWithinRoot(canonicalRoot, target)) {
+          continue;
+        }
+        const targetStat = await stat(target);
+        if (targetStat.isDirectory()) {
+          await visit(target);
+        } else if (targetStat.isFile() && target.endsWith(".jsonl")) {
+          discovered.add(target);
+        }
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+        discovered.add(await realpath(entryPath));
       }
     }
   }
 
-  await visit(root);
-  return discovered.sort((left, right) => left.localeCompare(right));
+  await visit(canonicalRoot);
+  return [...discovered].sort((left, right) => left.localeCompare(right));
 }
 
-export async function* readJsonlRecords(
+function parseJsonRecord(
+  line: Buffer,
+):
+  | { kind: "record"; record: JsonRecord }
+  | { kind: "ignored" }
+  | { kind: "invalid" } {
+  const content = line.toString("utf8").replace(/\r$/, "");
+  if (content.trim().length === 0) {
+    return { kind: "ignored" };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(content);
+    const record = asRecord(parsed);
+    return record === undefined
+      ? { kind: "ignored" }
+      : { kind: "record", record };
+  } catch {
+    return { kind: "invalid" };
+  }
+}
+
+export async function streamJsonlRecords(
   sourceFile: string,
-): AsyncGenerator<JsonRecord> {
-  const input = createReadStream(sourceFile, {
-    encoding: "utf8",
+  startOffset: number,
+  onRecord: (
+    record: JsonRecord,
+    position: JsonlRecordPosition,
+  ) => void | Promise<void>,
+): Promise<JsonlReadResult> {
+  const metadata = await stat(sourceFile);
+  const fileSize = metadata.size;
+  const safeStart =
+    Number.isSafeInteger(startOffset) &&
+    startOffset >= 0 &&
+    startOffset <= fileSize
+      ? startOffset
+      : 0;
+
+  if (safeStart === fileSize) {
+    return {
+      processedBytes: safeStart,
+      fileSize,
+      malformedLines: 0,
+      truncated: false,
+    };
+  }
+
+  const stream = createReadStream(sourceFile, {
     flags: "r",
+    start: safeStart,
+    end: fileSize - 1,
   });
-  const lines = createInterface({ input, crlfDelay: Infinity });
+  let buffer = Buffer.alloc(0);
+  let bufferStart = safeStart;
+  let processedBytes = safeStart;
+  let malformedLines = 0;
 
-  for await (const line of lines) {
-    if (line.trim().length === 0) {
-      continue;
-    }
+  for await (const chunk of stream) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    buffer = buffer.length === 0 ? bytes : Buffer.concat([buffer, bytes]);
 
-    try {
-      const parsed: unknown = JSON.parse(line);
-      const record = asRecord(parsed);
-      if (record !== undefined) {
-        yield record;
+    let newlineIndex = buffer.indexOf(0x0a);
+    while (newlineIndex >= 0) {
+      const line = buffer.subarray(0, newlineIndex);
+      const endOffset = bufferStart + newlineIndex + 1;
+      const parsed = parseJsonRecord(line);
+      if (parsed.kind === "record") {
+        await onRecord(parsed.record, {
+          startOffset: bufferStart,
+          endOffset,
+        });
+      } else if (parsed.kind === "invalid") {
+        malformedLines += 1;
       }
-    } catch {
-      // A partially written or unknown line must not make the whole session fail.
+      processedBytes = endOffset;
+      buffer = buffer.subarray(newlineIndex + 1);
+      bufferStart = endOffset;
+      newlineIndex = buffer.indexOf(0x0a);
     }
   }
+
+  if (buffer.length === 0) {
+    return { processedBytes, fileSize, malformedLines, truncated: false };
+  }
+
+  const trailing = parseJsonRecord(buffer);
+  if (trailing.kind === "record") {
+    await onRecord(trailing.record, {
+      startOffset: bufferStart,
+      endOffset: fileSize,
+    });
+    processedBytes = fileSize;
+  } else if (trailing.kind === "ignored") {
+    processedBytes = fileSize;
+  } else {
+    return { processedBytes, fileSize, malformedLines, truncated: true };
+  }
+
+  return { processedBytes, fileSize, malformedLines, truncated: false };
 }
 
-export function fallbackSessionId(sourceFile: string): string {
-  const basename = path.basename(sourceFile, path.extname(sourceFile)).trim();
-  return basename.length > 0 ? basename : "unknown-session";
+export async function hashFilePrefix(
+  sourceFile: string,
+  byteLength?: number,
+): Promise<string> {
+  const metadata = await stat(sourceFile);
+  const length =
+    byteLength === undefined
+      ? metadata.size
+      : Math.max(0, Math.min(metadata.size, Math.trunc(byteLength)));
+  const hash = createHash("sha256");
+  if (length === 0) {
+    return hash.digest("hex");
+  }
+
+  const stream = createReadStream(sourceFile, {
+    flags: "r",
+    start: 0,
+    end: length - 1,
+  });
+  for await (const chunk of stream) {
+    hash.update(chunk as Buffer);
+  }
+  return hash.digest("hex");
+}
+
+export function stableSessionId(
+  provider: Provider,
+  providerSessionId: string,
+): string {
+  return createHash("sha256")
+    .update(provider)
+    .update("\0")
+    .update(providerSessionId)
+    .digest("hex");
+}
+
+export function fallbackProviderSessionId(
+  provider: Provider,
+  sourceFile: string,
+): string {
+  const digest = createHash("sha256")
+    .update(provider)
+    .update("\0")
+    .update(path.resolve(sourceFile))
+    .digest("hex");
+  return `generated:${digest}`;
+}
+
+export function stableUsageEventId(
+  provider: Provider,
+  sourceFile: string,
+  sourceOffset: number,
+  eventType: UsageEventType,
+): string {
+  return createHash("sha256")
+    .update(provider)
+    .update("\0")
+    .update(path.resolve(sourceFile))
+    .update("\0")
+    .update(String(sourceOffset))
+    .update("\0")
+    .update(eventType)
+    .digest("hex");
+}
+
+export function redactHomePath(
+  candidate: string | null,
+  userHome = homedir(),
+): string | null {
+  if (candidate === null) {
+    return null;
+  }
+  const canonical = (value: string): string => {
+    try {
+      return realpathSync.native(value);
+    } catch {
+      return path.resolve(value);
+    }
+  };
+  const relative = path.relative(canonical(userHome), canonical(candidate));
+  if (relative === "") {
+    return "~";
+  }
+  if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+    return path.join("~", relative);
+  }
+  return candidate;
 }
