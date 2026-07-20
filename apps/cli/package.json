@@ -1,0 +1,20 @@
+{
+  "name": "@agentledger/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agentledger": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@agentledger/adapter-claude-code": "workspace:*",
+    "@agentledger/adapter-codex": "workspace:*",
+    "@agentledger/core": "workspace:*",
+    "@agentledger/database": "workspace:*",
+    "@agentledger/git-tracker": "workspace:*",
+    "@agentledger/shared": "workspace:*"
+  }
+}

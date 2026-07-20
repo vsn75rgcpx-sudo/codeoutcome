@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@agentledger/shared": ["packages/shared/src/index.ts"],
+      "@agentledger/core": ["packages/core/src/index.ts"],
+      "@agentledger/adapter-claude-code": [
+        "packages/adapters/claude-code/src/index.ts"
+      ],
+      "@agentledger/adapter-codex": ["packages/adapters/codex/src/index.ts"],
+      "@agentledger/database": ["packages/database/src/index.ts"],
+      "@agentledger/git-tracker": ["packages/git-tracker/src/index.ts"]
+    },
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "useUnknownInCatchVariables": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "verbatimModuleSyntax": true
+  }
+}
