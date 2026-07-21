@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { accessSync, constants, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
 
 import type {
   AccountingMethod,
@@ -17,6 +18,15 @@ import type {
   Session,
   SessionGitLink,
   SessionLinkMethod,
+  TestFramework,
+  TestOutcome,
+  TestParserStatus,
+  TestReportImport,
+  TestRun,
+  TestRunLink,
+  TestRunSource,
+  TestRunStatus,
+  TestStage,
   TrackingRun,
   TrackingRunStatus,
   UsageEvent,
@@ -174,6 +184,51 @@ export interface CreateSessionGitLinkInput {
   createdAt: string;
 }
 
+export interface TestRunQuery {
+  since?: string;
+  framework?: TestFramework;
+  trackingRunId?: string;
+  sessionId?: string;
+  outcome?: TestOutcome;
+  status?: TestRunStatus;
+  limit?: number;
+}
+
+export interface CreateTestRunOptions {
+  link?: Omit<TestRunLink, "id">;
+}
+
+export interface CompleteTestRunInput {
+  endedAt: string;
+  durationMs: number;
+  exitCode: number | null;
+  terminationSignal: "SIGINT" | "SIGTERM" | null;
+  status: Exclude<TestRunStatus, "running">;
+  outcome: TestOutcome;
+  totalTests: number | null;
+  passedTests: number | null;
+  failedTests: number | null;
+  skippedTests: number | null;
+  todoTests: number | null;
+  erroredTests: number | null;
+  parserStatus: TestParserStatus;
+  parserVersion: string;
+  outputTruncated: boolean;
+  warnings: readonly string[];
+  updatedAt: string;
+}
+
+export interface SaveTestReportResult {
+  kind: "inserted" | "updated" | "unchanged";
+  testRun: TestRun;
+  reportImport: TestReportImport;
+}
+
+export interface DeleteTestRunsQuery {
+  before?: string;
+  trackingRunId?: string;
+}
+
 interface SessionRow {
   id: unknown;
   provider: unknown;
@@ -329,6 +384,65 @@ interface SessionGitLinkRow {
   unlink_reason: unknown;
 }
 
+interface TestRunRow {
+  id: unknown;
+  tracking_run_id: unknown;
+  session_id: unknown;
+  repository_id: unknown;
+  working_directory: unknown;
+  started_at: unknown;
+  ended_at: unknown;
+  duration_ms: unknown;
+  stage: unknown;
+  framework: unknown;
+  framework_version: unknown;
+  executable: unknown;
+  command_display: unknown;
+  command_fingerprint: unknown;
+  argument_count: unknown;
+  exit_code: unknown;
+  termination_signal: unknown;
+  status: unknown;
+  outcome: unknown;
+  total_tests: unknown;
+  passed_tests: unknown;
+  failed_tests: unknown;
+  skipped_tests: unknown;
+  todo_tests: unknown;
+  errored_tests: unknown;
+  parser_status: unknown;
+  parser_version: unknown;
+  output_truncated: unknown;
+  source: unknown;
+  warnings_json: unknown;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+interface TestReportImportRow {
+  id: unknown;
+  test_run_id: unknown;
+  format: unknown;
+  canonical_path: unknown;
+  file_fingerprint: unknown;
+  file_size: unknown;
+  imported_at: unknown;
+  parser_version: unknown;
+  status: unknown;
+  warning: unknown;
+}
+
+interface TestRunLinkRow {
+  id: unknown;
+  test_run_id: unknown;
+  tracking_run_id: unknown;
+  session_id: unknown;
+  link_type: unknown;
+  confidence: unknown;
+  reasons_json: unknown;
+  created_at: unknown;
+}
+
 function nullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
@@ -431,6 +545,68 @@ function confidenceLevelFrom(value: unknown): LinkConfidenceLevel | null {
 
 function linkMethodFrom(value: unknown): SessionLinkMethod | null {
   return value === "automatic" || value === "manual" ? value : null;
+}
+
+function testStageFrom(value: unknown): TestStage {
+  return value === "baseline" ||
+    value === "intermediate" ||
+    value === "final" ||
+    value === "unspecified"
+    ? value
+    : "unspecified";
+}
+
+function testFrameworkFrom(value: unknown): TestFramework {
+  return value === "pytest" ||
+    value === "jest" ||
+    value === "vitest" ||
+    value === "junit" ||
+    value === "go" ||
+    value === "cargo" ||
+    value === "generic"
+    ? value
+    : "generic";
+}
+
+function testStatusFrom(value: unknown): TestRunStatus {
+  if (
+    value === "running" ||
+    value === "completed" ||
+    value === "interrupted" ||
+    value === "failed_to_start" ||
+    value === "abandoned"
+  ) {
+    return value;
+  }
+  throw new Error(`Unsupported test run status: ${String(value)}`);
+}
+
+function testOutcomeFrom(value: unknown): TestOutcome {
+  return value === "passed" ||
+    value === "failed" ||
+    value === "errored" ||
+    value === "interrupted" ||
+    value === "unknown"
+    ? value
+    : "unknown";
+}
+
+function testParserStatusFrom(value: unknown): TestParserStatus {
+  return value === "parsed" ||
+    value === "partially_parsed" ||
+    value === "exit_code_only" ||
+    value === "unsupported" ||
+    value === "malformed"
+    ? value
+    : "unsupported";
+}
+
+function testSourceFrom(value: unknown): TestRunSource {
+  return value === "wrapped_command" ||
+    value === "imported_report" ||
+    value === "manual"
+    ? value
+    : "manual";
 }
 
 function stringArrayFromJson(value: unknown): string[] {
@@ -679,6 +855,83 @@ function sessionGitLinkFromRow(row: SessionGitLinkRow): SessionGitLink {
   };
 }
 
+function testRunFromRow(row: TestRunRow): TestRun {
+  const terminationSignal =
+    row.termination_signal === "SIGINT" || row.termination_signal === "SIGTERM"
+      ? row.termination_signal
+      : null;
+  return {
+    id: requiredString(row.id, ""),
+    trackingRunId: nullableString(row.tracking_run_id),
+    sessionId: nullableString(row.session_id),
+    repositoryId: nullableNumber(row.repository_id),
+    workingDirectory: requiredString(row.working_directory, ""),
+    startedAt: requiredString(row.started_at, ""),
+    endedAt: nullableString(row.ended_at),
+    durationMs: nullableNumber(row.duration_ms),
+    stage: testStageFrom(row.stage),
+    framework: testFrameworkFrom(row.framework),
+    frameworkVersion: nullableString(row.framework_version),
+    executable: requiredString(row.executable, "unknown"),
+    commandDisplay: requiredString(row.command_display, "unknown"),
+    commandFingerprint: requiredString(row.command_fingerprint, ""),
+    argumentCount: safeNumber(row.argument_count),
+    exitCode: nullableNumber(row.exit_code),
+    terminationSignal,
+    status: testStatusFrom(row.status),
+    outcome: testOutcomeFrom(row.outcome),
+    totalTests: nullableNumber(row.total_tests),
+    passedTests: nullableNumber(row.passed_tests),
+    failedTests: nullableNumber(row.failed_tests),
+    skippedTests: nullableNumber(row.skipped_tests),
+    todoTests: nullableNumber(row.todo_tests),
+    erroredTests: nullableNumber(row.errored_tests),
+    parserStatus: testParserStatusFrom(row.parser_status),
+    parserVersion: requiredString(row.parser_version, "unknown"),
+    outputTruncated: safeNumber(row.output_truncated) === 1,
+    source: testSourceFrom(row.source),
+    warnings: stringArrayFromJson(row.warnings_json),
+    createdAt: requiredString(row.created_at, ""),
+    updatedAt: requiredString(row.updated_at, ""),
+  };
+}
+
+function testReportImportFromRow(row: TestReportImportRow): TestReportImport {
+  const status =
+    row.status === "updated" || row.status === "unchanged"
+      ? row.status
+      : "imported";
+  return {
+    id: requiredString(row.id, ""),
+    testRunId: requiredString(row.test_run_id, ""),
+    format: requiredString(row.format, "unknown"),
+    canonicalPath: requiredString(row.canonical_path, ""),
+    fileFingerprint: requiredString(row.file_fingerprint, ""),
+    fileSize: safeNumber(row.file_size),
+    importedAt: requiredString(row.imported_at, ""),
+    parserVersion: requiredString(row.parser_version, "unknown"),
+    status,
+    warning: nullableString(row.warning),
+  };
+}
+
+function testRunLinkFromRow(row: TestRunLinkRow): TestRunLink {
+  const linkType =
+    row.link_type === "manual" || row.link_type === "unlink"
+      ? row.link_type
+      : "auto";
+  return {
+    id: requiredString(row.id, ""),
+    testRunId: requiredString(row.test_run_id, ""),
+    trackingRunId: nullableString(row.tracking_run_id),
+    sessionId: nullableString(row.session_id),
+    linkType,
+    confidence: nullableNumber(row.confidence),
+    reasons: stringArrayFromJson(row.reasons_json),
+    createdAt: requiredString(row.created_at, ""),
+  };
+}
+
 export function getAgentLedgerPaths(
   environment: NodeJS.ProcessEnv = process.env,
   userHome = homedir(),
@@ -797,6 +1050,21 @@ export function inspectDatabase(databaseFile: string): DatabaseInspection {
       pendingMigrations: LATEST_MIGRATION_VERSION,
       latestImportRun: null,
     };
+  }
+}
+
+export async function backupDatabase(
+  databaseFile: string,
+  backupFile: string,
+): Promise<void> {
+  if (!existsSync(databaseFile))
+    throw new Error("Database file does not exist");
+  mkdirSync(path.dirname(backupFile), { recursive: true, mode: 0o700 });
+  const database = new DatabaseSync(databaseFile, { readOnly: true });
+  try {
+    await sqliteBackup(database, backupFile);
+  } finally {
+    database.close();
   }
 }
 
@@ -1805,6 +2073,641 @@ export class SessionDatabase {
     return rows.map(sessionGitLinkFromRow);
   }
 
+  #insertTestRunRow(run: TestRun): void {
+    this.#database
+      .prepare(
+        `
+        INSERT INTO test_runs (
+          id, tracking_run_id, session_id, repository_id, working_directory,
+          started_at, ended_at, duration_ms, stage, framework,
+          framework_version, executable, command_display, command_fingerprint,
+          argument_count, exit_code, termination_signal, status, outcome,
+          total_tests, passed_tests, failed_tests, skipped_tests, todo_tests,
+          errored_tests, parser_status, parser_version, output_truncated,
+          source, warnings_json, created_at, updated_at
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )
+      `,
+      )
+      .run(
+        run.id,
+        run.trackingRunId,
+        run.sessionId,
+        run.repositoryId,
+        run.workingDirectory,
+        run.startedAt,
+        run.endedAt,
+        run.durationMs,
+        run.stage,
+        run.framework,
+        run.frameworkVersion,
+        run.executable,
+        run.commandDisplay,
+        run.commandFingerprint,
+        run.argumentCount,
+        run.exitCode,
+        run.terminationSignal,
+        run.status,
+        run.outcome,
+        run.totalTests,
+        run.passedTests,
+        run.failedTests,
+        run.skippedTests,
+        run.todoTests,
+        run.erroredTests,
+        run.parserStatus,
+        run.parserVersion,
+        run.outputTruncated ? 1 : 0,
+        run.source,
+        JSON.stringify(run.warnings),
+        run.createdAt,
+        run.updatedAt,
+      );
+  }
+
+  #replaceTestRunRow(run: TestRun): void {
+    this.#database
+      .prepare(
+        `
+        UPDATE test_runs SET
+          tracking_run_id = ?, session_id = ?, repository_id = ?,
+          working_directory = ?, started_at = ?, ended_at = ?, duration_ms = ?,
+          stage = ?, framework = ?, framework_version = ?, executable = ?,
+          command_display = ?, command_fingerprint = ?, argument_count = ?,
+          exit_code = ?, termination_signal = ?, status = ?, outcome = ?,
+          total_tests = ?, passed_tests = ?, failed_tests = ?, skipped_tests = ?,
+          todo_tests = ?, errored_tests = ?, parser_status = ?,
+          parser_version = ?, output_truncated = ?, source = ?, warnings_json = ?,
+          updated_at = ? WHERE id = ?
+      `,
+      )
+      .run(
+        run.trackingRunId,
+        run.sessionId,
+        run.repositoryId,
+        run.workingDirectory,
+        run.startedAt,
+        run.endedAt,
+        run.durationMs,
+        run.stage,
+        run.framework,
+        run.frameworkVersion,
+        run.executable,
+        run.commandDisplay,
+        run.commandFingerprint,
+        run.argumentCount,
+        run.exitCode,
+        run.terminationSignal,
+        run.status,
+        run.outcome,
+        run.totalTests,
+        run.passedTests,
+        run.failedTests,
+        run.skippedTests,
+        run.todoTests,
+        run.erroredTests,
+        run.parserStatus,
+        run.parserVersion,
+        run.outputTruncated ? 1 : 0,
+        run.source,
+        JSON.stringify(run.warnings),
+        run.updatedAt,
+        run.id,
+      );
+  }
+
+  #insertTestRunLink(link: TestRunLink): void {
+    this.#database
+      .prepare(
+        `
+        INSERT INTO test_run_links (
+          id, test_run_id, tracking_run_id, session_id, link_type,
+          confidence, reasons_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .run(
+        link.id,
+        link.testRunId,
+        link.trackingRunId,
+        link.sessionId,
+        link.linkType,
+        link.confidence,
+        JSON.stringify(link.reasons),
+        link.createdAt,
+      );
+  }
+
+  #insertTestRunEvent(
+    testRunId: string,
+    eventType:
+      "created" | "completed" | "recovered" | "abandoned" | "report_updated",
+    status: TestRunStatus,
+    outcome: TestOutcome,
+    createdAt: string,
+    details: Record<string, string | number | boolean | null> = {},
+  ): void {
+    this.#database
+      .prepare(
+        `
+        INSERT INTO test_run_events (
+          id, test_run_id, event_type, status, outcome, details_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .run(
+        randomUUID(),
+        testRunId,
+        eventType,
+        status,
+        outcome,
+        JSON.stringify(details),
+        createdAt,
+      );
+  }
+
+  createTestRun(run: TestRun, options: CreateTestRunOptions = {}): TestRun {
+    this.#assertWritable("createTestRun");
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#insertTestRunRow(run);
+      this.#insertTestRunEvent(
+        run.id,
+        "created",
+        run.status,
+        run.outcome,
+        run.createdAt,
+      );
+      if (options.link !== undefined) {
+        this.#insertTestRunLink({ id: randomUUID(), ...options.link });
+      }
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.getTestRun(run.id)!;
+  }
+
+  completeTestRun(testRunId: string, input: CompleteTestRunInput): TestRun {
+    this.#assertWritable("completeTestRun");
+    const current = this.getTestRun(testRunId);
+    if (current === null) throw new Error("Test run not found");
+    if (current.status !== "running") {
+      throw new Error(`Test run is not running (${current.status})`);
+    }
+    const completed: TestRun = {
+      ...current,
+      ...input,
+      warnings: [...input.warnings],
+    };
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#replaceTestRunRow(completed);
+      this.#insertTestRunEvent(
+        completed.id,
+        "completed",
+        completed.status,
+        completed.outcome,
+        completed.updatedAt,
+        { outputTruncated: completed.outputTruncated },
+      );
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.getTestRun(testRunId)!;
+  }
+
+  getTestRun(testRunId: string): TestRun | null {
+    const row = this.#database
+      .prepare("SELECT * FROM test_runs WHERE id = ?")
+      .get(testRunId) as TestRunRow | undefined;
+    return row === undefined ? null : testRunFromRow(row);
+  }
+
+  listTestRuns(query: TestRunQuery = {}): TestRun[] {
+    const conditions: string[] = [];
+    const parameters: Array<string | number> = [];
+    if (query.since !== undefined) {
+      conditions.push("started_at >= ?");
+      parameters.push(query.since);
+    }
+    if (query.framework !== undefined) {
+      conditions.push("framework = ?");
+      parameters.push(query.framework);
+    }
+    if (query.trackingRunId !== undefined) {
+      conditions.push("tracking_run_id = ?");
+      parameters.push(query.trackingRunId);
+    }
+    if (query.sessionId !== undefined) {
+      conditions.push("session_id = ?");
+      parameters.push(query.sessionId);
+    }
+    if (query.outcome !== undefined) {
+      conditions.push("outcome = ?");
+      parameters.push(query.outcome);
+    }
+    if (query.status !== undefined) {
+      conditions.push("status = ?");
+      parameters.push(query.status);
+    }
+    const limit = Math.max(1, Math.min(10_000, Math.trunc(query.limit ?? 100)));
+    parameters.push(limit);
+    const where =
+      conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`;
+    const rows = this.#database
+      .prepare(
+        `SELECT * FROM test_runs ${where} ORDER BY started_at DESC LIMIT ?`,
+      )
+      .all(...parameters) as unknown as TestRunRow[];
+    return rows.map(testRunFromRow);
+  }
+
+  listTestRunLinks(testRunId: string): TestRunLink[] {
+    const rows = this.#database
+      .prepare(
+        "SELECT * FROM test_run_links WHERE test_run_id = ? ORDER BY created_at, id",
+      )
+      .all(testRunId) as unknown as TestRunLinkRow[];
+    return rows.map(testRunLinkFromRow);
+  }
+
+  linkTestRun(
+    testRunId: string,
+    input: {
+      trackingRunId?: string;
+      sessionId?: string;
+      linkType: "auto" | "manual";
+      confidence: number;
+      reasons: readonly string[];
+      createdAt: string;
+    },
+  ): TestRun {
+    this.#assertWritable("linkTestRun");
+    const current = this.getTestRun(testRunId);
+    if (current === null) throw new Error("Test run not found");
+    const tracking =
+      input.trackingRunId === undefined
+        ? null
+        : this.getTrackingRun(input.trackingRunId);
+    if (input.trackingRunId !== undefined && tracking === null) {
+      throw new Error("Tracking run not found");
+    }
+    const trackingRunId = input.trackingRunId ?? current.trackingRunId;
+    const sessionId =
+      input.sessionId ?? tracking?.linkedSessionId ?? current.sessionId;
+    if (input.sessionId !== undefined && !this.sessionExists(input.sessionId)) {
+      throw new Error("Session not found");
+    }
+    if (trackingRunId === null && sessionId === null) {
+      throw new Error("A tracking run or session link is required");
+    }
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#database
+        .prepare(
+          "UPDATE test_runs SET tracking_run_id = ?, session_id = ?, updated_at = ? WHERE id = ?",
+        )
+        .run(trackingRunId, sessionId, input.createdAt, testRunId);
+      this.#insertTestRunLink({
+        id: randomUUID(),
+        testRunId,
+        trackingRunId,
+        sessionId,
+        linkType: input.linkType,
+        confidence: input.confidence,
+        reasons: [...input.reasons],
+        createdAt: input.createdAt,
+      });
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.getTestRun(testRunId)!;
+  }
+
+  unlinkTestRun(testRunId: string, createdAt: string): TestRun {
+    this.#assertWritable("unlinkTestRun");
+    if (this.getTestRun(testRunId) === null)
+      throw new Error("Test run not found");
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#database
+        .prepare(
+          "UPDATE test_runs SET tracking_run_id = NULL, session_id = NULL, updated_at = ? WHERE id = ?",
+        )
+        .run(createdAt, testRunId);
+      this.#insertTestRunLink({
+        id: randomUUID(),
+        testRunId,
+        trackingRunId: null,
+        sessionId: null,
+        linkType: "unlink",
+        confidence: null,
+        reasons: ["manually unlinked by user"],
+        createdAt,
+      });
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.getTestRun(testRunId)!;
+  }
+
+  backfillTestRunSessionLinks(
+    trackingRunId: string,
+    sessionId: string | null,
+    createdAt: string,
+  ): number {
+    this.#assertWritable("backfillTestRunSessionLinks");
+    if (sessionId === null) return 0;
+    if (!this.sessionExists(sessionId)) throw new Error("Session not found");
+    const rows = this.#database
+      .prepare(
+        `
+        SELECT t.id FROM test_runs t
+        WHERE t.tracking_run_id = ?
+          AND (t.session_id IS NULL OR t.session_id <> ?)
+          AND NOT EXISTS (
+            SELECT 1 FROM test_run_links l
+            WHERE l.test_run_id = t.id
+              AND l.link_type = 'manual'
+              AND l.session_id IS NOT NULL
+          )
+      `,
+      )
+      .all(trackingRunId, sessionId) as Array<{ id?: unknown }>;
+    const ids = rows
+      .map((row) => nullableString(row.id))
+      .filter((id): id is string => id !== null);
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      for (const id of ids) {
+        this.#database
+          .prepare(
+            "UPDATE test_runs SET session_id = ?, updated_at = ? WHERE id = ?",
+          )
+          .run(sessionId, createdAt, id);
+        this.#insertTestRunLink({
+          id: randomUUID(),
+          testRunId: id,
+          trackingRunId,
+          sessionId,
+          linkType: "auto",
+          confidence: 1,
+          reasons: ["session inherited from linked tracking run"],
+          createdAt,
+        });
+      }
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return ids.length;
+  }
+
+  getTestReportImport(
+    format: string,
+    canonicalPath: string,
+  ): TestReportImport | null {
+    const row = this.#database
+      .prepare(
+        "SELECT * FROM test_report_imports WHERE format = ? AND canonical_path = ?",
+      )
+      .get(format, canonicalPath) as TestReportImportRow | undefined;
+    return row === undefined ? null : testReportImportFromRow(row);
+  }
+
+  saveTestReport(
+    testRun: TestRun,
+    reportImport: TestReportImport,
+    options: CreateTestRunOptions = {},
+  ): SaveTestReportResult {
+    this.#assertWritable("saveTestReport");
+    const existing = this.getTestReportImport(
+      reportImport.format,
+      reportImport.canonicalPath,
+    );
+    if (
+      existing !== null &&
+      existing.fileFingerprint === reportImport.fileFingerprint
+    ) {
+      const existingRun = this.getTestRun(existing.testRunId);
+      if (existingRun === null) throw new Error("Imported test run is missing");
+      return {
+        kind: "unchanged",
+        testRun: existingRun,
+        reportImport: { ...existing, status: "unchanged" },
+      };
+    }
+
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      if (existing === null) {
+        this.#insertTestRunRow(testRun);
+        this.#insertTestRunEvent(
+          testRun.id,
+          "created",
+          testRun.status,
+          testRun.outcome,
+          testRun.createdAt,
+        );
+        this.#database
+          .prepare(
+            `
+            INSERT INTO test_report_imports (
+              id, test_run_id, format, canonical_path, file_fingerprint,
+              file_size, imported_at, parser_version, status, warning
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'imported', ?)
+          `,
+          )
+          .run(
+            reportImport.id,
+            testRun.id,
+            reportImport.format,
+            reportImport.canonicalPath,
+            reportImport.fileFingerprint,
+            reportImport.fileSize,
+            reportImport.importedAt,
+            reportImport.parserVersion,
+            reportImport.warning,
+          );
+        if (options.link !== undefined) {
+          this.#insertTestRunLink({ id: randomUUID(), ...options.link });
+        }
+      } else {
+        const previous = this.getTestRun(existing.testRunId);
+        if (previous === null) throw new Error("Imported test run is missing");
+        const replacement: TestRun = {
+          ...testRun,
+          id: previous.id,
+          createdAt: previous.createdAt,
+          trackingRunId: testRun.trackingRunId ?? previous.trackingRunId,
+          sessionId: testRun.sessionId ?? previous.sessionId,
+          repositoryId: testRun.repositoryId ?? previous.repositoryId,
+        };
+        this.#replaceTestRunRow(replacement);
+        this.#database
+          .prepare(
+            `
+            UPDATE test_report_imports SET test_run_id = ?, file_fingerprint = ?,
+              file_size = ?, imported_at = ?, parser_version = ?,
+              status = 'updated', warning = ? WHERE id = ?
+          `,
+          )
+          .run(
+            previous.id,
+            reportImport.fileFingerprint,
+            reportImport.fileSize,
+            reportImport.importedAt,
+            reportImport.parserVersion,
+            reportImport.warning,
+            existing.id,
+          );
+        this.#insertTestRunEvent(
+          previous.id,
+          "report_updated",
+          replacement.status,
+          replacement.outcome,
+          replacement.updatedAt,
+        );
+        if (options.link !== undefined) {
+          this.#insertTestRunLink({
+            id: randomUUID(),
+            ...options.link,
+            testRunId: previous.id,
+          });
+        }
+      }
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    const stored = this.getTestReportImport(
+      reportImport.format,
+      reportImport.canonicalPath,
+    )!;
+    return {
+      kind: existing === null ? "inserted" : "updated",
+      testRun: this.getTestRun(stored.testRunId)!,
+      reportImport: stored,
+    };
+  }
+
+  recoverTestRun(
+    testRunId: string,
+    action: "recover" | "abandon",
+    updatedAt: string,
+  ): TestRun {
+    this.#assertWritable("recoverTestRun");
+    const current = this.getTestRun(testRunId);
+    if (current === null) throw new Error("Test run not found");
+    if (current.status !== "running") {
+      throw new Error(`Test run is not running (${current.status})`);
+    }
+    const start = new Date(current.startedAt).getTime();
+    const end = new Date(updatedAt).getTime();
+    const durationMs =
+      Number.isFinite(start) && Number.isFinite(end)
+        ? Math.max(0, end - start)
+        : null;
+    const recovered: TestRun = {
+      ...current,
+      endedAt: updatedAt,
+      durationMs,
+      exitCode: null,
+      terminationSignal: null,
+      status: action === "recover" ? "interrupted" : "abandoned",
+      outcome: action === "recover" ? "interrupted" : "unknown",
+      totalTests: null,
+      passedTests: null,
+      failedTests: null,
+      skippedTests: null,
+      todoTests: null,
+      erroredTests: null,
+      parserStatus: "unsupported",
+      warnings: [
+        ...current.warnings,
+        `test_run_${action}ed_without_exit_status`,
+      ],
+      updatedAt,
+    };
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#replaceTestRunRow(recovered);
+      this.#insertTestRunEvent(
+        testRunId,
+        action === "recover" ? "recovered" : "abandoned",
+        recovered.status,
+        recovered.outcome,
+        updatedAt,
+        { exitCodeUnavailable: true },
+      );
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.getTestRun(testRunId)!;
+  }
+
+  runningTestRunCount(): number {
+    const row = this.#database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM test_runs WHERE status = 'running'",
+      )
+      .get() as { count?: unknown } | undefined;
+    return safeNumber(row?.count);
+  }
+
+  countTestRuns(query: DeleteTestRunsQuery = {}): number {
+    const conditions: string[] = [];
+    const parameters: string[] = [];
+    if (query.before !== undefined) {
+      conditions.push("started_at < ?");
+      parameters.push(query.before);
+    }
+    if (query.trackingRunId !== undefined) {
+      conditions.push("tracking_run_id = ?");
+      parameters.push(query.trackingRunId);
+    }
+    const where =
+      conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`;
+    const row = this.#database
+      .prepare(`SELECT COUNT(*) AS count FROM test_runs ${where}`)
+      .get(...parameters) as { count?: unknown } | undefined;
+    return safeNumber(row?.count);
+  }
+
+  deleteTestRuns(query: DeleteTestRunsQuery = {}): number {
+    this.#assertWritable("deleteTestRuns");
+    const conditions: string[] = [];
+    const parameters: string[] = [];
+    if (query.before !== undefined) {
+      conditions.push("started_at < ?");
+      parameters.push(query.before);
+    }
+    if (query.trackingRunId !== undefined) {
+      conditions.push("tracking_run_id = ?");
+      parameters.push(query.trackingRunId);
+    }
+    const where =
+      conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`;
+    const result = this.#database
+      .prepare(`DELETE FROM test_runs ${where}`)
+      .run(...parameters);
+    return Number(result.changes);
+  }
+
   usageEventCount(): number {
     const row = this.#database
       .prepare("SELECT COUNT(*) AS count FROM usage_events")
@@ -1821,6 +2724,18 @@ export class SessionDatabase {
     return rows
       .map((row) => nullableString(row.name))
       .filter((name): name is string => name !== null);
+  }
+
+  foreignKeysEnabled(): boolean {
+    const row = this.#database.prepare("PRAGMA foreign_keys").get() as
+      { foreign_keys?: unknown } | undefined;
+    return safeNumber(row?.foreign_keys) === 1;
+  }
+
+  quickCheck(): string {
+    const row = this.#database.prepare("PRAGMA quick_check").get();
+    const value = row === undefined ? undefined : Object.values(row)[0];
+    return typeof value === "string" ? value : String(value ?? "unknown");
   }
 
   close(): void {

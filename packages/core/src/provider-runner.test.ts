@@ -15,7 +15,9 @@ describe("provider process wrapper", () => {
     ) => {
       expect(executable).toBe("fake-codex");
       expect(arguments_).toEqual(["--model", "fixture; touch forbidden"]);
-      expect(options).toEqual({ shell: false, stdio: "inherit" });
+      expect(options.shell).toBe(false);
+      expect(options.stdio).toBe("inherit");
+      expect(options.env).toBe(process.env);
       return { exitCode: 7, signal: null };
     };
 

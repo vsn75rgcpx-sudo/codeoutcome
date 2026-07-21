@@ -10,6 +10,7 @@ import { SessionDatabase, type SourceImportInput } from "@agentledger/database";
 import {
   stableSessionId,
   type Session,
+  type TestRun,
   type UsageEvent,
 } from "@agentledger/shared";
 
@@ -125,6 +126,43 @@ function importedSession(repository: string): SourceImportInput {
   };
 }
 
+function trackedTestRun(trackingRunId: string, repository: string): TestRun {
+  return {
+    id: "tracked-test-run",
+    trackingRunId,
+    sessionId: null,
+    repositoryId: null,
+    workingDirectory: repository,
+    startedAt: "2026-01-01T00:05:00.000Z",
+    endedAt: "2026-01-01T00:05:01.000Z",
+    durationMs: 1000,
+    stage: "baseline",
+    framework: "generic",
+    frameworkVersion: null,
+    executable: "fixture",
+    commandDisplay: "fixture",
+    commandFingerprint: "f".repeat(64),
+    argumentCount: 0,
+    exitCode: 0,
+    terminationSignal: null,
+    status: "completed",
+    outcome: "passed",
+    totalTests: null,
+    passedTests: null,
+    failedTests: null,
+    skippedTests: null,
+    todoTests: null,
+    erroredTests: null,
+    parserStatus: "exit_code_only",
+    parserVersion: "fixture-v1",
+    outputTruncated: false,
+    source: "wrapped_command",
+    warnings: [],
+    createdAt: "2026-01-01T00:05:00.000Z",
+    updatedAt: "2026-01-01T00:05:01.000Z",
+  };
+}
+
 describe("tracking lifecycle", () => {
   it("starts and stops a clean repository with zero observed changes", async () => {
     const { database, repository } = await fixture();
@@ -219,6 +257,7 @@ describe("tracking lifecycle", () => {
       workingDirectory: repository,
       now: () => new Date("2026-01-01T00:00:00.000Z"),
     });
+    database.createTestRun(trackedTestRun(started.id, repository));
     const result = await stopTracking({
       database,
       trackingRunId: started.id,
@@ -230,6 +269,13 @@ describe("tracking lifecycle", () => {
       linkedSessionId: imported.session.id,
       linkMethod: "automatic",
       linkConfidenceLevel: "high",
+    });
+    expect(database.getTestRun("tracked-test-run")?.sessionId).toBe(
+      imported.session.id,
+    );
+    expect(database.listTestRunLinks("tracked-test-run")[0]).toMatchObject({
+      linkType: "auto",
+      sessionId: imported.session.id,
     });
     database.close();
   });

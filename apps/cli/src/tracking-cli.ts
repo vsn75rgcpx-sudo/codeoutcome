@@ -1,5 +1,6 @@
 import {
   abandonTracking,
+  buildTrackingTestSummary,
   captureManualSnapshot,
   manualLinkTrackingRun,
   readAgentLedgerConfig,
@@ -8,6 +9,7 @@ import {
   setPrivacyMode,
   startTracking,
   stopTracking,
+  TRACKING_RUN_ENVIRONMENT_VARIABLE,
   trackingDuration,
   unlinkTrackingRun,
   type ProviderProcessRunner,
@@ -25,6 +27,7 @@ import {
   type Provider,
   type SessionAdapter,
   type TrackingRun,
+  type TestRun,
 } from "@agentledger/shared";
 
 export interface TrackingCliIo {
@@ -43,6 +46,7 @@ export interface TrackingCliContext {
   gitRunner?: GitProcessRunner;
   processRunner?: ProviderProcessRunner;
   codexExecutable: string;
+  environment: NodeJS.ProcessEnv;
 }
 
 interface Flags {
@@ -118,6 +122,14 @@ function safeRun(run: TrackingRun, home: string): TrackingRun {
   };
 }
 
+function safeTestRun(run: TestRun, home: string): TestRun {
+  return {
+    ...run,
+    workingDirectory: redact(run.workingDirectory, home),
+    commandDisplay: run.commandDisplay.split(home).join("~"),
+  };
+}
+
 function duration(milliseconds: number | null): string {
   if (milliseconds === null) return "active";
   const minutes = Math.floor(milliseconds / 60_000);
@@ -148,6 +160,26 @@ function runText(run: TrackingRun, database: SessionDatabase): string {
       ? null
       : database.getSession(run.linkedSessionId);
   const summary = run.summary;
+  const testSummary = buildTrackingTestSummary(
+    run,
+    database.listTestRuns({ trackingRunId: run.id, limit: 10_000 }),
+  );
+  const testLines =
+    testSummary.testRunCount === 0
+      ? ["Test results: No recorded test runs"]
+      : [
+          `Test runs: ${testSummary.testRunCount}`,
+          `Test successful/failed/interrupted runs: ${testSummary.successfulRunCount}/${testSummary.failedRunCount}/${testSummary.interruptedRunCount}`,
+          `Test framework: ${testSummary.framework ?? "mixed or unavailable"}`,
+          `First successful run: ${testSummary.firstSuccessAt ?? "unavailable"}`,
+          `Time to first success: ${testSummary.timeToFirstSuccessMs ?? "unavailable"}ms`,
+          `Failed runs before first success: ${testSummary.failedRunsBeforeFirstSuccess ?? "unavailable"}`,
+          `Test baseline/final outcome: ${testSummary.baselineOutcome ?? "unavailable"}/${testSummary.finalOutcome ?? "unavailable"}`,
+          `Test failed/passed/duration delta: ${testSummary.failedTestDelta ?? "unknown"}/${testSummary.passedTestDelta ?? "unknown"}/${testSummary.durationDeltaMs ?? "unknown"}ms`,
+          `Test comparison: ${testSummary.comparison?.comparability ?? "unavailable"}`,
+          `Test warnings: ${testSummary.warnings.join("; ") || "—"}`,
+          "Test results recorded during an AI coding session; passing tests do not prove code correctness.",
+        ];
   return [
     `Tracking run: ${run.id}`,
     `Label: ${run.label ?? "—"}`,
@@ -169,6 +201,7 @@ function runText(run: TrackingRun, database: SessionDatabase): string {
     `Link method: ${run.linkMethod ?? "none"}`,
     `Reasons: ${run.linkReasons.join("; ") || "—"}`,
     `Warnings: ${run.warnings.join("; ") || "—"}`,
+    ...testLines,
     "Changes are observed during the tracked AI coding session; they are not exact AI code attribution.",
   ].join("\n");
 }
@@ -184,6 +217,27 @@ function runJson(run: TrackingRun, database: SessionDatabase, home: string) {
     run.linkedSessionId === null
       ? null
       : database.getSession(run.linkedSessionId);
+  const testSummary = buildTrackingTestSummary(
+    run,
+    database.listTestRuns({ trackingRunId: run.id, limit: 10_000 }),
+  );
+  const safeTestSummary = {
+    ...testSummary,
+    comparison:
+      testSummary.comparison === null
+        ? null
+        : {
+            ...testSummary.comparison,
+            baseline:
+              testSummary.comparison.baseline === null
+                ? null
+                : safeTestRun(testSummary.comparison.baseline, home),
+            final:
+              testSummary.comparison.final === null
+                ? null
+                : safeTestRun(testSummary.comparison.final, home),
+          },
+  };
   return {
     ...safe,
     startSnapshot: start === null ? null : safeSnapshot(start, home),
@@ -199,6 +253,7 @@ function runJson(run: TrackingRun, database: SessionDatabase, home: string) {
             outputTokens: session.outputTokens,
             totalTokens: session.inputTokens + session.outputTokens,
           },
+    testSummary: safeTestSummary,
   };
 }
 
@@ -476,6 +531,17 @@ async function runCodex(
     executable: context.codexExecutable,
     arguments: forwarded,
     processRunner: context.processRunner,
+    processEnvironment: () => {
+      const inherited = { ...context.environment };
+      if (inherited[TRACKING_RUN_ENVIRONMENT_VARIABLE] !== undefined) {
+        context.io.stderr(
+          `WARN: Existing ${TRACKING_RUN_ENVIRONMENT_VARIABLE} was preserved; nested test auto-linking may refer to another run.`,
+        );
+      } else if (trackingRunId !== null) {
+        inherited[TRACKING_RUN_ENVIRONMENT_VARIABLE] = trackingRunId;
+      }
+      return inherited;
+    },
     onFinalizationError: (error) => {
       const message =
         error instanceof Error

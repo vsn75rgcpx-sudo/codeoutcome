@@ -9,6 +9,7 @@ Claude JSONL -> Claude adapter --+
 Codex JSONL --> Codex adapter ---+                               |
                                                                 +-> SQLite migrations
 Git executable -> git-tracker -> core tracking/link scoring ----+          |
+Test executable/report -> core test parsers/association --------+          |
                                                                            +-> CLI reports
 ```
 
@@ -21,15 +22,19 @@ Git executable -> git-tracker -> core tracking/link scoring ----+          |
 - `packages/core`: import orchestration, per-file error isolation, incremental
   checkpoint decisions, canonical token audit/reconciliation, time buckets,
   local pricing, tracking lifecycle, explainable session linking, privacy
-  configuration, and provider runner orchestration.
+  configuration, provider runner orchestration, bounded-output test command
+  execution, versioned test/report parsers, and result comparison.
 - `packages/database`: versioned SQLite migrations, transactions, checkpoints,
   repositories, import runs, Git snapshots, tracking runs, link history, and
+  test runs, report fingerprints, append-only test link/recovery history, and
   filtered queries.
 - `packages/git-tracker`: read-only Git enrichment, machine-readable porcelain
   and numstat parsing, snapshot capture/comparison, and remote URL sanitization.
 - `apps/cli`: argument validation and human/JSON presentation for `doctor`,
   usage accounting, Git snapshots, tracking, recovery, configuration, and the
   Codex provider runner.
+  It also presents explicit test wrapping, report import, comparison, recovery,
+  and test-only deletion commands.
 
 `doctor` uses read-only database inspection and a read-only `SessionDatabase`
 only when the schema is current, so it cannot create a file or apply a migration.
@@ -80,3 +85,25 @@ Git is executed directly with an executable and argument array, `shell:false`,
 and machine-readable NUL-delimited output. Snapshots contain repository state,
 relative-path metadata or fingerprints, and numstat counts—not file bodies,
 environment variables, or complete diffs.
+
+## Test tracking flow
+
+`test run` creates a `running` row before spawning the requested executable with
+an argument array and `shell:false`. Stdout and stderr are forwarded to the
+terminal and copied only into a bounded, non-persistent memory buffer. A
+versioned framework parser extracts aggregate counts when possible; otherwise
+the result falls back to exit-code-only semantics. Finalization records normal,
+non-zero, signal, and failed-to-start outcomes without changing the child exit
+code.
+
+An association resolver canonicalizes the current directory and Git worktree.
+Exactly one active tracking run produces an automatic link; zero produces a
+standalone record; multiple candidates remain ambiguous. When tracking later
+links to a session, test rows without a session are backfilled. Every automatic,
+manual, and unlink decision is appended to `test_run_links`.
+
+Structured report import rejects oversized JSON and XML DTD/entity constructs,
+parses only aggregate metadata, and uses a format/path uniqueness key plus file
+fingerprint for idempotent rewrites. Comparison is dynamic: explicit baseline
+and final stages take precedence, with visibly inferred earliest/latest
+fallbacks when stages are absent.

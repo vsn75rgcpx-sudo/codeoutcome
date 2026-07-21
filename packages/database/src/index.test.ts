@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -13,6 +13,7 @@ import {
 } from "@agentledger/shared";
 
 import {
+  backupDatabase,
   inspectDatabase,
   LATEST_MIGRATION_VERSION,
   SessionDatabase,
@@ -136,6 +137,10 @@ describe("SessionDatabase migrations and queries", () => {
       "session_git_links",
       "sessions",
       "source_files",
+      "test_report_imports",
+      "test_run_events",
+      "test_run_links",
+      "test_runs",
       "tracking_runs",
       "usage_events",
     ]);
@@ -159,6 +164,10 @@ describe("SessionDatabase migrations and queries", () => {
       .map((row) => (row as { name?: unknown }).name);
     const trackingColumns = schema
       .prepare("PRAGMA table_info(tracking_runs)")
+      .all()
+      .map((row) => (row as { name?: unknown }).name);
+    const testRunColumns = schema
+      .prepare("PRAGMA table_info(test_runs)")
       .all()
       .map((row) => (row as { name?: unknown }).name);
     expect(sessionColumns).toEqual(
@@ -189,6 +198,21 @@ describe("SessionDatabase migrations and queries", () => {
         "link_reasons_json",
       ]),
     );
+    expect(testRunColumns).toEqual(
+      expect.arrayContaining([
+        "tracking_run_id",
+        "session_id",
+        "command_fingerprint",
+        "parser_status",
+        "output_truncated",
+        "warnings_json",
+      ]),
+    );
+    expect(
+      schema
+        .prepare("SELECT name FROM schema_migrations WHERE version = 5")
+        .get(),
+    ).toMatchObject({ name: "test_run_tracking" });
     schema.close();
 
     const repeatedMigration = new SessionDatabase(databaseFile);
@@ -225,6 +249,18 @@ describe("SessionDatabase migrations and queries", () => {
 
     expect(database.repositoryCount()).toBe(1);
     database.close();
+  });
+
+  it("creates a consistent SQLite API backup without changing the source", async () => {
+    const { database, databaseFile, directory } = await temporaryDatabase();
+    database.close();
+    const backupFile = path.join(directory, "backups", "fixture.sqlite");
+    await backupDatabase(databaseFile, backupFile);
+    await expect(access(backupFile)).resolves.toBeUndefined();
+    const backup = new SessionDatabase(backupFile, { readOnly: true });
+    expect(backup.migrationVersion()).toBe(LATEST_MIGRATION_VERSION);
+    expect(backup.quickCheck()).toBe("ok");
+    backup.close();
   });
 
   it("filters sessions by provider, date range, and repository", async () => {

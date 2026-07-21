@@ -68,3 +68,48 @@ export {
   type RunTrackedProviderOptions,
   type SupportedTerminationSignal,
 } from "./provider-runner.js";
+export {
+  DEFAULT_TEST_OUTPUT_CAPTURE_LIMIT,
+  defaultTestProcessRunner,
+  runTestCommand,
+  safeTestCommand,
+  type RunTestCommandOptions,
+  type RunTestCommandResult,
+  type SafeTestCommand,
+  type TestProcessOptions,
+  type TestProcessOutcome,
+  type TestProcessRunner,
+} from "./test-command.js";
+export {
+  detectTestFramework,
+  parseTestOutput,
+  TEST_OUTPUT_PARSER_VERSION,
+  type ParsedTestOutput,
+} from "./test-parsers.js";
+export {
+  importTestReport,
+  MAX_TEST_REPORT_BYTES,
+  parseTestReportBuffer,
+  TestReportParseError,
+  TEST_REPORT_PARSER_VERSION,
+  type ImportTestReportOptions,
+  type ImportTestReportResult,
+  type ParsedTestReport,
+  type TestReportFormat,
+} from "./test-reports.js";
+export {
+  associationLink,
+  manualLinkTestRun,
+  resolveTestAssociation,
+  TRACKING_RUN_ENVIRONMENT_VARIABLE,
+  unlinkTestRun,
+  type ProviderTestHookContext,
+  type TestAssociation,
+} from "./test-tracking.js";
+export {
+  buildTrackingTestSummary,
+  compareSessionTests,
+  compareTestRuns,
+  compareTrackingRunTests,
+  selectTestComparison,
+} from "./test-comparison.js";

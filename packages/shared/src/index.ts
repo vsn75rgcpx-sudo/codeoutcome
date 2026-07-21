@@ -29,6 +29,23 @@ export type TrackingRunStatus =
   "active" | "completed" | "interrupted" | "failed" | "abandoned";
 export type LinkConfidenceLevel = "high" | "medium" | "low" | "ambiguous";
 export type SessionLinkMethod = "automatic" | "manual";
+export type TestStage = "baseline" | "intermediate" | "final" | "unspecified";
+export type TestFramework =
+  "pytest" | "jest" | "vitest" | "junit" | "go" | "cargo" | "generic";
+export type TestRunStatus =
+  "running" | "completed" | "interrupted" | "failed_to_start" | "abandoned";
+export type TestOutcome =
+  "passed" | "failed" | "errored" | "interrupted" | "unknown";
+export type TestParserStatus =
+  | "parsed"
+  | "partially_parsed"
+  | "exit_code_only"
+  | "unsupported"
+  | "malformed";
+export type TestRunSource = "wrapped_command" | "imported_report" | "manual";
+export type TestLinkType = "auto" | "manual" | "unlink";
+export type TestComparability =
+  "comparable" | "partially_comparable" | "not_comparable";
 
 export interface GitFileStat {
   id: string;
@@ -126,6 +143,109 @@ export interface SessionGitLink {
   createdAt: string;
   unlinkedAt: string | null;
   unlinkReason: string | null;
+}
+
+export interface TestRun {
+  id: string;
+  trackingRunId: string | null;
+  sessionId: string | null;
+  repositoryId: number | null;
+  workingDirectory: string;
+  startedAt: string;
+  endedAt: string | null;
+  durationMs: number | null;
+  stage: TestStage;
+  framework: TestFramework;
+  frameworkVersion: string | null;
+  executable: string;
+  commandDisplay: string;
+  commandFingerprint: string;
+  argumentCount: number;
+  exitCode: number | null;
+  terminationSignal: "SIGINT" | "SIGTERM" | null;
+  status: TestRunStatus;
+  outcome: TestOutcome;
+  totalTests: number | null;
+  passedTests: number | null;
+  failedTests: number | null;
+  skippedTests: number | null;
+  todoTests: number | null;
+  erroredTests: number | null;
+  parserStatus: TestParserStatus;
+  parserVersion: string;
+  outputTruncated: boolean;
+  source: TestRunSource;
+  warnings: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TestReportImport {
+  id: string;
+  testRunId: string;
+  format: string;
+  canonicalPath: string;
+  fileFingerprint: string;
+  fileSize: number;
+  importedAt: string;
+  parserVersion: string;
+  status: "imported" | "updated" | "unchanged";
+  warning: string | null;
+}
+
+export interface TestRunLink {
+  id: string;
+  testRunId: string;
+  trackingRunId: string | null;
+  sessionId: string | null;
+  linkType: TestLinkType;
+  confidence: number | null;
+  reasons: string[];
+  createdAt: string;
+}
+
+export interface TestCountSummary {
+  totalTests: number | null;
+  passedTests: number | null;
+  failedTests: number | null;
+  skippedTests: number | null;
+  todoTests: number | null;
+  erroredTests: number | null;
+}
+
+export interface TestComparison {
+  baseline: TestRun | null;
+  final: TestRun | null;
+  baselineSelection: "explicit" | "inferred" | "unavailable";
+  finalSelection: "explicit" | "inferred" | "unavailable";
+  comparability: TestComparability;
+  comparisonConfidence: number | null;
+  sameCommand: boolean | null;
+  totalTestDelta: number | null;
+  passedTestDelta: number | null;
+  failedTestDelta: number | null;
+  skippedTestDelta: number | null;
+  durationDeltaMs: number | null;
+  warnings: string[];
+}
+
+export interface TrackingTestSummary {
+  testRunCount: number;
+  failedRunCount: number;
+  successfulRunCount: number;
+  interruptedRunCount: number;
+  firstSuccessAt: string | null;
+  timeToFirstSuccessMs: number | null;
+  failedRunsBeforeFirstSuccess: number | null;
+  baselineOutcome: TestOutcome | null;
+  finalOutcome: TestOutcome | null;
+  failedTestDelta: number | null;
+  passedTestDelta: number | null;
+  durationDeltaMs: number | null;
+  comparisonConfidence: number | null;
+  framework: TestFramework | null;
+  comparison: TestComparison | null;
+  warnings: string[];
 }
 
 export interface Session {

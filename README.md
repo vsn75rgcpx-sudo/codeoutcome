@@ -2,9 +2,10 @@
 
 AgentLedger is a local-first CLI that imports Claude Code and OpenAI Codex
 session metadata into SQLite, reports token usage, and records local Git changes
-observed during an AI coding session. It reads JSONL logs incrementally, keeps
-the two provider parsers independent, and stores only accounting and Git
-metadata.
+observed during an AI coding session. It also records explicitly wrapped local
+test runs and imported aggregate test reports. It reads JSONL logs incrementally,
+keeps Provider and test parsers independent, and stores only accounting, Git,
+and aggregate test metadata.
 
 There is no web app, desktop app, VS Code plugin, cloud sync, telemetry, or
 network pricing lookup in the current phase.
@@ -14,6 +15,13 @@ AgentLedger uses this wording:
 > **Changes observed during an AI coding session**
 
 It does not claim exact AI authorship.
+
+For tests, AgentLedger uses this wording:
+
+> **Test results recorded during an AI coding session**
+
+A recorded passing test is not proof that code is correct, and a changed result
+is not attributed causally to a Provider.
 
 ## Requirements
 
@@ -43,6 +51,9 @@ pnpm cli sessions --limit 10
 pnpm cli usage --weekly
 pnpm cli git snapshot
 pnpm cli track start --provider codex --label "investigate timeout"
+pnpm cli test run --stage baseline -- pnpm test
+pnpm cli test import --file ./report.xml --format junit
+pnpm cli test compare --tracking-run <tracking-run-id>
 pnpm cli track stop
 ```
 
@@ -69,6 +80,18 @@ agentledger track recover [tracking-run-id|--list]
 agentledger track abandon <tracking-run-id>
 agentledger run codex [-- <codex arguments>]
 agentledger config set privacy git-metadata|strict
+agentledger test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
+agentledger test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
+agentledger test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
+agentledger test show <test-run-id> [--json]
+agentledger test compare <baseline-id> <final-id> [--json]
+agentledger test compare --tracking-run <id> [--json]
+agentledger test compare --session <id> [--json]
+agentledger test link <test-run-id> [--tracking-run id] [--session id]
+agentledger test unlink <test-run-id>
+agentledger test recover <test-run-id>|--list
+agentledger test abandon <test-run-id>
+agentledger data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]
 ```
 
 `doctor` is diagnostic only: it does not create the database, run migrations,
@@ -80,7 +103,15 @@ its `--dry-run` mode does not change accounting rows. `sessions` and `usage`
 query the persisted database. `track start` and `track stop` capture Git metadata
 without changing the working tree. `run codex` wraps the local Codex executable
 with the same lifecycle, forwards arguments without a shell, and returns Codex's
-exit code.
+exit code. It passes the tracking ID through `AGENTLEDGER_TRACKING_RUN_ID` when
+that value is not already present.
+
+`test run` executes the requested executable and argument array with
+`shell:false`, keeps terminal output visible, and returns the original child
+exit code. Its parser uses a bounded, non-persistent memory buffer. `test import`
+reads aggregate JUnit XML, pytest JSON, Jest JSON, or Vitest JSON without copying
+the report. `test compare` reports baseline/final deltas only when values are
+known and labels scope differences as partial or not comparable.
 
 Default paths:
 
@@ -118,6 +149,13 @@ filtering and report buckets use UTC.
   `git-metadata` mode stores repository-relative paths, change types, and
   available numstat counts. `strict` stores only irreversible path fingerprints
   and aggregate counts for new snapshots.
+- Test tracking never stores raw stdout/stderr, failure bodies, stack traces,
+  test case names, test source, or environment variables. Secret-like command
+  arguments are redacted before persistence; raw arguments are used only to
+  launch the requested process.
+- In `strict` mode, test `command_display` contains only the executable basename
+  and report paths are replaced by irreversible fingerprints. Aggregate counts,
+  duration, exit status, framework, and parser status remain available.
 - There are no network requests or remote telemetry. Pricing uses only the
   bundled versioned local catalog.
 - All committed fixtures are synthetic and redacted. Never copy real user logs
@@ -126,7 +164,8 @@ filtering and report buckets use UTC.
   the source record body.
 
 The SQLite database is private local data and may still reveal project names,
-paths, models, branches, timestamps, and token counts. Protect it accordingly.
+paths, models, branches, timestamps, token counts, executable names, and test
+aggregates. Protect it accordingly.
 Changing to `strict` does not silently erase older metadata. To delete local
 history, first stop AgentLedger processes and make any desired backup, then
 manually remove `agentledger.sqlite` (including its `-wal`/`-shm` companions)
@@ -160,11 +199,27 @@ subset of Output. Therefore `Total = Input + Output`; Cache and reasoning are
 not added again. `usage` reports Input, Uncached Input, Cached Input, Output,
 and Total separately.
 
+Wrapped test output supports pytest, Jest, Vitest, Go test, Cargo test, and a
+generic exit-code fallback. Structured report import supports aggregate JUnit
+XML, pytest JSON, Jest JSON, and Vitest JSON. Oversized reports and XML DTD or
+entity declarations are rejected. Unknown counts remain unavailable rather than
+being presented as zero.
+
 See [Usage accounting](docs/usage-accounting.md) for exact token semantics,
 incremental-import behavior, and known risks. See
 [Git tracking](docs/git-tracking.md) for snapshot, confidence, privacy, and
-recovery semantics. See [Architecture](docs/architecture.md) for module
-boundaries.
+recovery semantics. See [Test tracking](docs/test-tracking.md) for wrapper,
+report, comparison, privacy, recovery, and deletion semantics. See
+[Architecture](docs/architecture.md) for module boundaries.
+
+## Test tracking limits
+
+AgentLedger cannot transparently intercept every command that Claude Code or
+Codex runs. Only commands invoked through `agentledger test run` and reports
+provided to `agentledger test import` are recorded. Tracking-run and session
+links establish timing and repository context; they do not prove authorship or
+causality. Output formats can change, so unrecognized summaries safely fall back
+to exit-code-only records with unknown counts.
 
 ## Cost status
 

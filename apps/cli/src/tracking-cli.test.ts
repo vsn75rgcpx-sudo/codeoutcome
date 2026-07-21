@@ -100,6 +100,19 @@ describe("Phase 3 CLI JSON", () => {
     await runCli(["track", "recover", "--list", "--json"], options);
     expect(JSON.parse(io.stdout.at(-1) ?? "[]")[0].id).toBe(started.id);
 
+    await runCli(
+      ["test", "run", "--stage", "baseline", "--json", "--", "fake-test"],
+      {
+        ...options,
+        testProcessRunner: async () => ({ exitCode: 0, signal: null }),
+      },
+    );
+    const testRun = JSON.parse(io.stdout.at(-1) ?? "{}");
+    expect(testRun).toMatchObject({
+      trackingRunId: started.id,
+      outcome: "passed",
+    });
+
     await runCli(["doctor", "--json"], options);
     const doctor = JSON.parse(io.stdout.at(-1) ?? "{}");
     expect(doctor.checks).toEqual(
@@ -122,7 +135,10 @@ describe("Phase 3 CLI JSON", () => {
     await runCli(["track", "list", "--since", "7d", "--json"], options);
     expect(JSON.parse(io.stdout.at(-1) ?? "[]")).toHaveLength(1);
     await runCli(["track", "show", started.id, "--json"], options);
-    expect(JSON.parse(io.stdout.at(-1) ?? "{}").id).toBe(started.id);
+    expect(JSON.parse(io.stdout.at(-1) ?? "{}")).toMatchObject({
+      id: started.id,
+      testSummary: { testRunCount: 1, successfulRunCount: 1 },
+    });
     expect(io.stdout.join("\n")).not.toContain("diff --git");
     expect(io.stdout.join("\n")).not.toContain("initial\n");
   });
@@ -163,6 +179,7 @@ describe("Phase 3 CLI JSON", () => {
       expect(executable).toBe("fake-codex");
       expect(arguments_).toEqual(["--model", "value; touch not-run"]);
       expect(spawn.shell).toBe(false);
+      expect(spawn.env.AGENTLEDGER_TRACKING_RUN_ID).toMatch(/^[0-9a-f-]{36}$/);
       return { exitCode: 9, signal: null };
     };
 
@@ -180,6 +197,29 @@ describe("Phase 3 CLI JSON", () => {
     );
 
     expect(result).toBe(9);
+  });
+
+  it("preserves an existing tracking environment hint and warns", async () => {
+    const { root, databaseFile } = await repository();
+    const io = memoryIo();
+    const result = await runCli(["run", "codex"], {
+      adapters: [],
+      codexExecutable: "fake-codex",
+      databaseFile,
+      environment: {
+        ...process.env,
+        AGENTLEDGER_TRACKING_RUN_ID: "existing-fixture",
+      },
+      io: io.io,
+      processRunner: async (_executable, _arguments, spawn) => {
+        expect(spawn.env.AGENTLEDGER_TRACKING_RUN_ID).toBe("existing-fixture");
+        return { exitCode: 0, signal: null };
+      },
+      userHome: root,
+      workingDirectory: root,
+    });
+    expect(result).toBe(0);
+    expect(io.stderr.join("\n")).toContain("was preserved");
   });
 
   it("returns a structured WARN outside a Git repository", async () => {

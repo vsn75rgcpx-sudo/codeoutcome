@@ -188,6 +188,11 @@ export async function stopTracking(
   }
   const finalRun = options.database.getTrackingRun(run.id);
   if (finalRun === null) throw new Error("Completed tracking run is missing");
+  options.database.backfillTestRunSessionLinks(
+    finalRun.id,
+    finalRun.linkedSessionId,
+    endSnapshotDraft.capturedAt,
+  );
   const endSnapshot = options.database.getGitSnapshot(endSnapshotDraft.id);
   if (endSnapshot === null) throw new Error("End Git snapshot is missing");
   return { run: finalRun, startSnapshot, endSnapshot, linkDecision: decision };
@@ -251,6 +256,7 @@ export function manualLinkTrackingRun(
     reasons: ["manually linked by user"],
     createdAt,
   });
+  database.backfillTestRunSessionLinks(trackingRunId, session.id, createdAt);
   return database.getTrackingRun(trackingRunId)!;
 }
 

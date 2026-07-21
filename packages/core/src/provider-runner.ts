@@ -10,6 +10,7 @@ export interface ProviderProcessOutcome {
 export interface ProviderSpawnOptions {
   shell: false;
   stdio: "inherit";
+  env: NodeJS.ProcessEnv;
 }
 
 export type ProviderProcessRunner = (
@@ -31,7 +32,7 @@ export const defaultProviderProcessRunner: ProviderProcessRunner = (
     const child = spawn(executable, [...arguments_], {
       shell: options.shell,
       stdio: options.stdio,
-      env: process.env,
+      env: options.env,
       windowsHide: true,
     });
     let forwardedSignal: SupportedTerminationSignal | null = null;
@@ -72,6 +73,7 @@ export interface RunTrackedProviderOptions {
     status: "completed" | "interrupted" | "failed",
   ) => Promise<void>;
   processRunner?: ProviderProcessRunner;
+  processEnvironment?: () => NodeJS.ProcessEnv;
   onFinalizationError?: (error: unknown) => void;
 }
 
@@ -89,6 +91,7 @@ export async function runTrackedProvider(
       {
         shell: false,
         stdio: "inherit",
+        env: options.processEnvironment?.() ?? process.env,
       },
     );
   } catch (error) {

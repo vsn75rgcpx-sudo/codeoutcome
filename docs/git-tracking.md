@@ -29,6 +29,12 @@ terminal input/output, `shell:false`, and an argument array. Normal exits,
 non-zero exits, SIGINT, and SIGTERM all attempt finalization. No Codex settings or
 permissions are changed.
 
+The runner also passes its tracking ID to nested commands through the dedicated
+`AGENTLEDGER_TRACKING_RUN_ID` environment value. An existing value is never
+overwritten. Explicit `agentledger test run -- ...` commands can use this hint
+for reliable association; AgentLedger does not transparently intercept every
+test command executed by a Provider.
+
 ## Recorded Git metadata
 
 Snapshots use `rev-parse`, `symbolic-ref`, porcelain v2 `-z`, numstat `-z`, and
@@ -125,3 +131,6 @@ tree.
   commit can reduce precision.
 - Provider logs can be delayed or omit times and paths, reducing link confidence.
 - Multiple equally plausible sessions remain ambiguous until manually linked.
+- Test results are recorded only for explicit wrappers or imported reports.
+  See [Local test run tracking](test-tracking.md); a test link describes context,
+  not proof that the Provider caused the result.

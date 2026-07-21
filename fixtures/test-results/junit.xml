@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="3" failures="1" errors="0" skipped="1">
+  <testsuite name="synthetic-suite" tests="3" failures="1" errors="0" skipped="1">
+    <testcase classname="fixture.Example" name="synthetic-pass" />
+    <testcase classname="fixture.Example" name="synthetic-failure"><failure /></testcase>
+    <testcase classname="fixture.Example" name="synthetic-skip"><skipped /></testcase>
+  </testsuite>
+</testsuites>

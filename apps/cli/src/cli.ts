@@ -12,6 +12,7 @@ import {
   reconcileUsage,
   runImport,
   type ProviderProcessRunner,
+  type TestProcessRunner,
   type CostSummary,
   type UsagePeriod,
   type UsageReport,
@@ -33,6 +34,7 @@ import {
 } from "@agentledger/shared";
 
 import { PHASE3_HELP, runPhase3Cli } from "./tracking-cli.js";
+import { runTestCli, TEST_HELP } from "./test-cli.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -52,6 +54,7 @@ export interface CliOptions {
   workingDirectory?: string;
   gitRunner?: GitProcessRunner;
   processRunner?: ProviderProcessRunner;
+  testProcessRunner?: TestProcessRunner;
   codexExecutable?: string;
 }
 
@@ -399,6 +402,13 @@ async function doctorChecks(
       solution: null,
     });
   }
+  checks.push({
+    check: "Test result formats",
+    status: "PASS",
+    detail:
+      "wrapped pytest, Jest, Vitest, Go test, Cargo test, generic exit codes; JUnit XML, pytest JSON, Jest JSON, Vitest JSON reports",
+    solution: null,
+  });
   const latest = inspection.latestImportRun;
   checks.push({
     check: "Latest import",
@@ -433,6 +443,19 @@ async function doctorChecks(
         solution:
           activeRuns > 0
             ? "Run `agentledger track recover --list`, then recover or abandon the intended run."
+            : null,
+      });
+      const runningTests = database.runningTestRunCount();
+      checks.push({
+        check: "Running test records",
+        status: runningTests > 0 ? "WARN" : "PASS",
+        detail:
+          runningTests > 0
+            ? `${runningTests} running test run(s) may require recovery`
+            : "No stale running test runs",
+        solution:
+          runningTests > 0
+            ? "Run `agentledger test recover --list`, then recover or abandon the intended test run."
             : null,
       });
     } finally {
@@ -962,7 +985,7 @@ async function runUsageCommand(
 }
 
 function help(): string {
-  return `AgentLedger — local-first Claude Code and Codex usage accounting
+  return `AgentLedger — local-first AI session, Git, and test result accounting
 
 Usage:
   agentledger doctor [--json]
@@ -972,8 +995,10 @@ Usage:
   agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
   agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
 ${PHASE3_HELP}
+${TEST_HELP}
 
-AgentLedger reads source logs without modifying them and never stores prompt or response bodies.`;
+AgentLedger reads source logs without modifying them and never stores prompt,
+response, source, or raw test output bodies.`;
 }
 
 export async function runCli(
@@ -989,6 +1014,17 @@ export async function runCli(
   const databaseFile =
     options.databaseFile ??
     getAgentLedgerPaths(environment, userHome, platform).databaseFile;
+  const testResult = await runTestCli(arguments_, {
+    io,
+    databaseFile,
+    dataDirectory: path.dirname(databaseFile),
+    userHome,
+    workingDirectory: options.workingDirectory ?? process.cwd(),
+    environment,
+    now,
+    testProcessRunner: options.testProcessRunner,
+  });
+  if (testResult !== null) return testResult;
   const phase3Result = await runPhase3Cli(arguments_, {
     io,
     databaseFile,
@@ -1000,6 +1036,7 @@ export async function runCli(
     gitRunner: options.gitRunner,
     processRunner: options.processRunner,
     codexExecutable: options.codexExecutable ?? "codex",
+    environment,
   });
   if (phase3Result !== null) return phase3Result;
   const [command = "help", ...commandArguments] = arguments_;

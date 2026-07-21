@@ -1,0 +1,12 @@
+{
+  "created": 1784592000,
+  "duration": 0.25,
+  "exitcode": 1,
+  "root": "/synthetic/project",
+  "summary": {
+    "passed": 2,
+    "failed": 1,
+    "skipped": 1,
+    "total": 4
+  }
+}

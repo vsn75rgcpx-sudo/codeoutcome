@@ -323,6 +323,124 @@ const MIGRATIONS: readonly Migration[] = [
         ON session_git_links(tracking_run_id) WHERE unlinked_at IS NULL;
     `,
   },
+  {
+    version: 5,
+    name: "test_run_tracking",
+    sql: `
+      CREATE TABLE test_runs (
+        id TEXT PRIMARY KEY,
+        tracking_run_id TEXT
+          REFERENCES tracking_runs(id) ON DELETE SET NULL,
+        session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+        repository_id INTEGER REFERENCES repositories(id) ON DELETE SET NULL,
+        working_directory TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        duration_ms INTEGER CHECK (duration_ms IS NULL OR duration_ms >= 0),
+        stage TEXT NOT NULL CHECK (stage IN (
+          'baseline', 'intermediate', 'final', 'unspecified'
+        )),
+        framework TEXT NOT NULL CHECK (framework IN (
+          'pytest', 'jest', 'vitest', 'junit', 'go', 'cargo', 'generic'
+        )),
+        framework_version TEXT,
+        executable TEXT NOT NULL,
+        command_display TEXT NOT NULL,
+        command_fingerprint TEXT NOT NULL,
+        argument_count INTEGER NOT NULL CHECK (argument_count >= 0),
+        exit_code INTEGER CHECK (exit_code IS NULL OR exit_code >= 0),
+        termination_signal TEXT CHECK (
+          termination_signal IS NULL OR termination_signal IN ('SIGINT', 'SIGTERM')
+        ),
+        status TEXT NOT NULL CHECK (status IN (
+          'running', 'completed', 'interrupted', 'failed_to_start', 'abandoned'
+        )),
+        outcome TEXT NOT NULL CHECK (outcome IN (
+          'passed', 'failed', 'errored', 'interrupted', 'unknown'
+        )),
+        total_tests INTEGER CHECK (total_tests IS NULL OR total_tests >= 0),
+        passed_tests INTEGER CHECK (passed_tests IS NULL OR passed_tests >= 0),
+        failed_tests INTEGER CHECK (failed_tests IS NULL OR failed_tests >= 0),
+        skipped_tests INTEGER CHECK (skipped_tests IS NULL OR skipped_tests >= 0),
+        todo_tests INTEGER CHECK (todo_tests IS NULL OR todo_tests >= 0),
+        errored_tests INTEGER CHECK (errored_tests IS NULL OR errored_tests >= 0),
+        parser_status TEXT NOT NULL CHECK (parser_status IN (
+          'parsed', 'partially_parsed', 'exit_code_only', 'unsupported', 'malformed'
+        )),
+        parser_version TEXT NOT NULL,
+        output_truncated INTEGER NOT NULL CHECK (output_truncated IN (0, 1)),
+        source TEXT NOT NULL CHECK (source IN (
+          'wrapped_command', 'imported_report', 'manual'
+        )),
+        warnings_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE test_report_imports (
+        id TEXT PRIMARY KEY,
+        test_run_id TEXT NOT NULL
+          REFERENCES test_runs(id) ON DELETE CASCADE,
+        format TEXT NOT NULL CHECK (format IN (
+          'junit', 'pytest-json', 'jest-json', 'vitest-json'
+        )),
+        canonical_path TEXT NOT NULL,
+        file_fingerprint TEXT NOT NULL,
+        file_size INTEGER NOT NULL CHECK (file_size >= 0),
+        imported_at TEXT NOT NULL,
+        parser_version TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN (
+          'imported', 'updated', 'unchanged'
+        )),
+        warning TEXT,
+        UNIQUE (format, canonical_path)
+      );
+
+      CREATE TABLE test_run_links (
+        id TEXT PRIMARY KEY,
+        test_run_id TEXT NOT NULL
+          REFERENCES test_runs(id) ON DELETE CASCADE,
+        tracking_run_id TEXT
+          REFERENCES tracking_runs(id) ON DELETE SET NULL,
+        session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
+        link_type TEXT NOT NULL CHECK (link_type IN ('auto', 'manual', 'unlink')),
+        confidence REAL CHECK (
+          confidence IS NULL OR (confidence >= 0 AND confidence <= 1)
+        ),
+        reasons_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE test_run_events (
+        id TEXT PRIMARY KEY,
+        test_run_id TEXT NOT NULL
+          REFERENCES test_runs(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL CHECK (event_type IN (
+          'created', 'completed', 'recovered', 'abandoned', 'report_updated'
+        )),
+        status TEXT NOT NULL CHECK (status IN (
+          'running', 'completed', 'interrupted', 'failed_to_start', 'abandoned'
+        )),
+        outcome TEXT NOT NULL CHECK (outcome IN (
+          'passed', 'failed', 'errored', 'interrupted', 'unknown'
+        )),
+        details_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX test_runs_started_at_idx ON test_runs(started_at);
+      CREATE INDEX test_runs_tracking_run_idx ON test_runs(tracking_run_id, started_at);
+      CREATE INDEX test_runs_session_idx ON test_runs(session_id, started_at);
+      CREATE INDEX test_runs_framework_idx ON test_runs(framework, started_at);
+      CREATE INDEX test_runs_status_idx ON test_runs(status);
+      CREATE INDEX test_report_imports_test_run_idx
+        ON test_report_imports(test_run_id);
+      CREATE INDEX test_run_links_test_run_idx
+        ON test_run_links(test_run_id, created_at);
+      CREATE INDEX test_run_events_test_run_idx
+        ON test_run_events(test_run_id, created_at);
+    `,
+  },
 ] as const;
 
 export const LATEST_MIGRATION_VERSION =
