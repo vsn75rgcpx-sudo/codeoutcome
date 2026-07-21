@@ -203,6 +203,126 @@ const MIGRATIONS: readonly Migration[] = [
       UPDATE source_files SET processed_hash = '${REPARSE_REQUIRED_CHECKPOINT}';
     `,
   },
+  {
+    version: 4,
+    name: "local_git_session_tracking",
+    sql: `
+      CREATE TABLE git_snapshots (
+        id TEXT PRIMARY KEY,
+        repository_id INTEGER NOT NULL
+          REFERENCES repositories(id) ON DELETE RESTRICT,
+        captured_at TEXT NOT NULL,
+        trigger TEXT NOT NULL CHECK (trigger IN (
+          'tracking_start', 'tracking_end', 'manual', 'recovery'
+        )),
+        privacy_mode TEXT NOT NULL CHECK (privacy_mode IN (
+          'git-metadata', 'strict'
+        )),
+        working_directory TEXT NOT NULL,
+        head_commit TEXT,
+        branch TEXT,
+        is_detached_head INTEGER NOT NULL CHECK (is_detached_head IN (0, 1)),
+        is_unborn_branch INTEGER NOT NULL CHECK (is_unborn_branch IN (0, 1)),
+        is_dirty INTEGER NOT NULL CHECK (is_dirty IN (0, 1)),
+        staged_file_count INTEGER NOT NULL CHECK (staged_file_count >= 0),
+        unstaged_file_count INTEGER NOT NULL CHECK (unstaged_file_count >= 0),
+        untracked_file_count INTEGER NOT NULL CHECK (untracked_file_count >= 0),
+        conflicted_file_count INTEGER NOT NULL CHECK (conflicted_file_count >= 0),
+        ahead_count INTEGER CHECK (ahead_count IS NULL OR ahead_count >= 0),
+        behind_count INTEGER CHECK (behind_count IS NULL OR behind_count >= 0),
+        git_version TEXT NOT NULL
+      );
+
+      CREATE TABLE git_file_stats (
+        id TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL
+          REFERENCES git_snapshots(id) ON DELETE CASCADE,
+        relative_path TEXT,
+        previous_path TEXT,
+        change_type TEXT NOT NULL CHECK (change_type IN (
+          'added', 'modified', 'deleted', 'renamed', 'copied',
+          'unmerged', 'untracked', 'unknown'
+        )),
+        area TEXT NOT NULL CHECK (area IN (
+          'staged', 'unstaged', 'untracked', 'conflicted'
+        )),
+        additions INTEGER CHECK (additions IS NULL OR additions >= 0),
+        deletions INTEGER CHECK (deletions IS NULL OR deletions >= 0),
+        is_binary INTEGER NOT NULL CHECK (is_binary IN (0, 1)),
+        content_fingerprint TEXT,
+        path_fingerprint TEXT NOT NULL,
+        UNIQUE (snapshot_id, area, path_fingerprint, change_type)
+      );
+
+      CREATE TABLE tracking_runs (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL CHECK (provider IN ('claude-code', 'codex')),
+        label TEXT,
+        working_directory TEXT NOT NULL,
+        repository_id INTEGER NOT NULL
+          REFERENCES repositories(id) ON DELETE RESTRICT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        status TEXT NOT NULL CHECK (status IN (
+          'active', 'completed', 'interrupted', 'failed', 'abandoned'
+        )),
+        start_snapshot_id TEXT NOT NULL UNIQUE
+          REFERENCES git_snapshots(id) ON DELETE RESTRICT,
+        end_snapshot_id TEXT UNIQUE
+          REFERENCES git_snapshots(id) ON DELETE RESTRICT,
+        linked_session_id TEXT
+          REFERENCES sessions(id) ON DELETE SET NULL,
+        link_confidence REAL CHECK (
+          link_confidence IS NULL OR
+          (link_confidence >= 0 AND link_confidence <= 1)
+        ),
+        link_confidence_level TEXT CHECK (
+          link_confidence_level IS NULL OR link_confidence_level IN (
+            'high', 'medium', 'low', 'ambiguous'
+          )
+        ),
+        link_method TEXT CHECK (
+          link_method IS NULL OR link_method IN ('automatic', 'manual')
+        ),
+        link_reasons_json TEXT NOT NULL DEFAULT '[]',
+        summary_json TEXT,
+        warnings_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE session_git_links (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        tracking_run_id TEXT NOT NULL
+          REFERENCES tracking_runs(id) ON DELETE CASCADE,
+        repository_id INTEGER NOT NULL
+          REFERENCES repositories(id) ON DELETE RESTRICT,
+        confidence_score REAL NOT NULL CHECK (
+          confidence_score >= 0 AND confidence_score <= 1
+        ),
+        confidence_level TEXT NOT NULL CHECK (confidence_level IN (
+          'high', 'medium', 'low', 'ambiguous'
+        )),
+        method TEXT NOT NULL CHECK (method IN ('automatic', 'manual')),
+        reasons_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        unlinked_at TEXT,
+        unlink_reason TEXT
+      );
+
+      CREATE UNIQUE INDEX tracking_runs_one_active_directory_idx
+        ON tracking_runs(working_directory) WHERE status = 'active';
+      CREATE INDEX tracking_runs_started_at_idx ON tracking_runs(started_at);
+      CREATE INDEX tracking_runs_status_idx ON tracking_runs(status);
+      CREATE INDEX git_snapshots_repository_idx
+        ON git_snapshots(repository_id, captured_at);
+      CREATE INDEX git_file_stats_snapshot_idx ON git_file_stats(snapshot_id);
+      CREATE INDEX session_git_links_session_idx ON session_git_links(session_id);
+      CREATE UNIQUE INDEX session_git_links_one_active_run_idx
+        ON session_git_links(tracking_run_id) WHERE unlinked_at IS NULL;
+    `,
+  },
 ] as const;
 
 export const LATEST_MIGRATION_VERSION =

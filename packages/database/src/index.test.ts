@@ -128,11 +128,15 @@ describe("SessionDatabase migrations and queries", () => {
 
     expect(database.migrationVersion()).toBe(LATEST_MIGRATION_VERSION);
     expect(database.tableNames()).toEqual([
+      "git_file_stats",
+      "git_snapshots",
       "import_runs",
       "repositories",
       "schema_migrations",
+      "session_git_links",
       "sessions",
       "source_files",
+      "tracking_runs",
       "usage_events",
     ]);
     database.close();
@@ -153,6 +157,10 @@ describe("SessionDatabase migrations and queries", () => {
       .prepare("PRAGMA table_info(usage_events)")
       .all()
       .map((row) => (row as { name?: unknown }).name);
+    const trackingColumns = schema
+      .prepare("PRAGMA table_info(tracking_runs)")
+      .all()
+      .map((row) => (row as { name?: unknown }).name);
     expect(sessionColumns).toEqual(
       expect.arrayContaining([
         "accounting_method",
@@ -170,6 +178,15 @@ describe("SessionDatabase migrations and queries", () => {
         "snapshot_sequence",
         "reasoning_output_tokens",
         "reported_total_tokens",
+      ]),
+    );
+    expect(trackingColumns).toEqual(
+      expect.arrayContaining([
+        "start_snapshot_id",
+        "end_snapshot_id",
+        "linked_session_id",
+        "link_confidence",
+        "link_reasons_json",
       ]),
     );
     schema.close();

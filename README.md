@@ -1,18 +1,25 @@
 # AgentLedger
 
 AgentLedger is a local-first CLI that imports Claude Code and OpenAI Codex
-session metadata into SQLite and reports token usage. It reads JSONL logs
-incrementally, keeps the two provider parsers independent, and stores only the
-metadata needed for accounting.
+session metadata into SQLite, reports token usage, and records local Git changes
+observed during an AI coding session. It reads JSONL logs incrementally, keeps
+the two provider parsers independent, and stores only accounting and Git
+metadata.
 
 There is no web app, desktop app, VS Code plugin, cloud sync, telemetry, or
 network pricing lookup in the current phase.
+
+AgentLedger uses this wording:
+
+> **Changes observed during an AI coding session**
+
+It does not claim exact AI authorship.
 
 ## Requirements
 
 - Node.js 22.13 or newer (for the built-in SQLite runtime)
 - pnpm 11 or newer
-- Git (used read-only for repository, branch, and sanitized remote metadata)
+- Git (used read-only for repository state and machine-readable change metadata)
 
 ## Install and develop
 
@@ -34,6 +41,9 @@ pnpm cli audit-usage --provider codex --top 20
 pnpm cli reconcile-usage --provider codex --dry-run
 pnpm cli sessions --limit 10
 pnpm cli usage --weekly
+pnpm cli git snapshot
+pnpm cli track start --provider codex --label "investigate timeout"
+pnpm cli track stop
 ```
 
 After `pnpm build`, the executable is `apps/cli/dist/index.js`. A linked or
@@ -48,14 +58,29 @@ agentledger audit-usage [--provider claude-code|codex] [--session id] [--top 20]
 agentledger reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
 agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
 agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
+agentledger git snapshot|status [--json]
+agentledger git show <snapshot-id> [--json]
+agentledger track start [--provider codex|claude-code] [--label text] [--json]
+agentledger track stop [tracking-run-id] [--json]
+agentledger track status|list|show
+agentledger track link <tracking-run-id> --session <session-id>
+agentledger track unlink <tracking-run-id>
+agentledger track recover [tracking-run-id|--list]
+agentledger track abandon <tracking-run-id>
+agentledger run codex [-- <codex arguments>]
+agentledger config set privacy git-metadata|strict
 ```
 
 `doctor` is diagnostic only: it does not create the database, run migrations,
-or modify user configuration. `import` is the only command that reads source
-logs. `audit-usage` inspects normalized events without reading message bodies.
+or modify user configuration. `import`, `track stop`, and the tracked Provider
+runner may read source logs through the same metadata-only adapters.
+`audit-usage` inspects normalized events without reading message bodies.
 `reconcile-usage` transactionally rebuilds session totals from those events;
 its `--dry-run` mode does not change accounting rows. `sessions` and `usage`
-query the persisted database.
+query the persisted database. `track start` and `track stop` capture Git metadata
+without changing the working tree. `run codex` wraps the local Codex executable
+with the same lifecycle, forwards arguments without a shell, and returns Codex's
+exit code.
 
 Default paths:
 
@@ -64,6 +89,7 @@ Default paths:
 - macOS database: `~/Library/Application Support/AgentLedger/agentledger.sqlite`
 - Linux database: `$XDG_DATA_HOME/agentledger/agentledger.sqlite`, or
   `~/.local/share/agentledger/agentledger.sqlite`
+- Local configuration: `config.json` beside the database
 
 Path overrides:
 
@@ -88,6 +114,10 @@ filtering and report buckets use UTC.
   `~`.
 - Git remotes have credentials, query strings, and fragments removed before
   storage.
+- Git snapshots never store source bodies or a complete diff. The default
+  `git-metadata` mode stores repository-relative paths, change types, and
+  available numstat counts. `strict` stores only irreversible path fingerprints
+  and aggregate counts for new snapshots.
 - There are no network requests or remote telemetry. Pricing uses only the
   bundled versioned local catalog.
 - All committed fixtures are synthetic and redacted. Never copy real user logs
@@ -97,6 +127,11 @@ filtering and report buckets use UTC.
 
 The SQLite database is private local data and may still reveal project names,
 paths, models, branches, timestamps, and token counts. Protect it accordingly.
+Changing to `strict` does not silently erase older metadata. To delete local
+history, first stop AgentLedger processes and make any desired backup, then
+manually remove `agentledger.sqlite` (including its `-wal`/`-shm` companions)
+and `config.json` from the local data directory. AgentLedger never performs this
+deletion automatically.
 
 ## Current format support
 
@@ -127,7 +162,9 @@ and Total separately.
 
 See [Usage accounting](docs/usage-accounting.md) for exact token semantics,
 incremental-import behavior, and known risks. See
-[Architecture](docs/architecture.md) for module boundaries.
+[Git tracking](docs/git-tracking.md) for snapshot, confidence, privacy, and
+recovery semantics. See [Architecture](docs/architecture.md) for module
+boundaries.
 
 ## Cost status
 

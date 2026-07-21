@@ -31,3 +31,40 @@ export {
   type UsageReport,
 } from "./usage.js";
 export type { ImportOptions, ImportReport, ImportWarning } from "./importer.js";
+export {
+  configFilePath,
+  DEFAULT_AGENTLEDGER_CONFIG,
+  readAgentLedgerConfig,
+  setPrivacyMode,
+  type AgentLedgerConfig,
+} from "./config.js";
+export {
+  SESSION_LINK_SCORING,
+  scoreSessionLink,
+  type SessionLinkCandidate,
+  type SessionLinkDecision,
+} from "./session-linking.js";
+export {
+  abandonTracking,
+  captureManualSnapshot,
+  manualLinkTrackingRun,
+  shortRepositoryName,
+  startTracking,
+  stopTracking,
+  trackingDuration,
+  unlinkTrackingRun,
+  type StartTrackingOptions,
+  type StopTrackingOptions,
+  type StopTrackingResult,
+  type TerminalTrackingStatus,
+  type TrackingServiceOptions,
+} from "./tracking.js";
+export {
+  defaultProviderProcessRunner,
+  runTrackedProvider,
+  type ProviderProcessOutcome,
+  type ProviderProcessRunner,
+  type ProviderSpawnOptions,
+  type RunTrackedProviderOptions,
+  type SupportedTerminationSignal,
+} from "./provider-runner.js";

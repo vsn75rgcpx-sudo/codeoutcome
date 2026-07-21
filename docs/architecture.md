@@ -5,9 +5,11 @@ and presentation:
 
 ```text
 Claude JSONL -> Claude adapter --+
-                                +-> core importer/accounting -> SQLite migrations
-Codex JSONL --> Codex adapter ---+             |                      |
-                                              +-> Git metadata         +-> CLI reports
+                                +-> core importer/accounting ----+
+Codex JSONL --> Codex adapter ---+                               |
+                                                                +-> SQLite migrations
+Git executable -> git-tracker -> core tracking/link scoring ----+          |
+                                                                           +-> CLI reports
 ```
 
 ## Packages
@@ -18,17 +20,21 @@ Codex JSONL --> Codex adapter ---+             |                      |
 - `packages/adapters/codex`: Codex discovery and parsing only.
 - `packages/core`: import orchestration, per-file error isolation, incremental
   checkpoint decisions, canonical token audit/reconciliation, time buckets,
-  and local pricing.
+  local pricing, tracking lifecycle, explainable session linking, privacy
+  configuration, and provider runner orchestration.
 - `packages/database`: versioned SQLite migrations, transactions, checkpoints,
-  repositories, import runs, and filtered queries.
-- `packages/git-tracker`: read-only Git enrichment and remote URL sanitization.
+  repositories, import runs, Git snapshots, tracking runs, link history, and
+  filtered queries.
+- `packages/git-tracker`: read-only Git enrichment, machine-readable porcelain
+  and numstat parsing, snapshot capture/comparison, and remote URL sanitization.
 - `apps/cli`: argument validation and human/JSON presentation for `doctor`,
-  `import`, `audit-usage`, `reconcile-usage`, `sessions`, and `usage`.
+  usage accounting, Git snapshots, tracking, recovery, configuration, and the
+  Codex provider runner.
 
-`doctor` uses read-only inspection and never constructs `SessionDatabase`, so it
-cannot create a file or apply a migration. A non-dry-run import opens the
-database, applies pending migrations transactionally, enables foreign keys and
-WAL, and imports one source at a time.
+`doctor` uses read-only database inspection and a read-only `SessionDatabase`
+only when the schema is current, so it cannot create a file or apply a migration.
+Writable commands apply pending migrations transactionally, enable foreign keys
+and WAL, and keep Token accounting rows separate from Git tracking rows.
 
 ## Storage flow
 
@@ -56,3 +62,21 @@ Historical cumulative snapshots and paired informational payloads stay in
 `usage_events` for audit. Only the final reliable snapshot, or deduplicated
 increments when snapshots are absent, is marked canonical. Decreasing snapshots
 or mixed ranges become `ambiguous` and carry explicit reason codes.
+
+## Git tracking flow
+
+`track start` canonicalizes the current directory, identifies the worktree root,
+captures a Git start snapshot, and inserts the snapshot and active tracking run
+in one transaction. A partial unique index prevents two active runs for the same
+canonical working directory.
+
+`track stop` captures an end snapshot, compares it with the start, imports the
+selected Provider's latest logs, and applies the centralized explainable session
+score. The end snapshot and run summary are transactional. Automatic and manual
+links are recorded as append-only `session_git_links` history; unlinking marks a
+record inactive instead of deleting it.
+
+Git is executed directly with an executable and argument array, `shell:false`,
+and machine-readable NUL-delimited output. Snapshots contain repository state,
+relative-path metadata or fingerprints, and numstat counts—not file bodies,
+environment variables, or complete diffs.

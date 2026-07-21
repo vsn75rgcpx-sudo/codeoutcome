@@ -12,6 +12,121 @@ export type AccountingMethod =
 export type AccountingStatus = "verified" | "warning" | "invalid";
 export type AccountingRole =
   "cumulative_snapshot" | "incremental" | "informational";
+export type GitPrivacyMode = "git-metadata" | "strict";
+export type GitSnapshotTrigger =
+  "tracking_start" | "tracking_end" | "manual" | "recovery";
+export type GitChangeArea = "staged" | "unstaged" | "untracked" | "conflicted";
+export type GitChangeType =
+  | "added"
+  | "modified"
+  | "deleted"
+  | "renamed"
+  | "copied"
+  | "unmerged"
+  | "untracked"
+  | "unknown";
+export type TrackingRunStatus =
+  "active" | "completed" | "interrupted" | "failed" | "abandoned";
+export type LinkConfidenceLevel = "high" | "medium" | "low" | "ambiguous";
+export type SessionLinkMethod = "automatic" | "manual";
+
+export interface GitFileStat {
+  id: string;
+  snapshotId: string;
+  relativePath: string | null;
+  previousPath: string | null;
+  changeType: GitChangeType;
+  area: GitChangeArea;
+  additions: number | null;
+  deletions: number | null;
+  isBinary: boolean;
+  contentFingerprint: string | null;
+  pathFingerprint: string;
+}
+
+export interface GitSnapshot {
+  id: string;
+  repositoryId: number;
+  repositoryPath: string;
+  capturedAt: string;
+  trigger: GitSnapshotTrigger;
+  privacyMode: GitPrivacyMode;
+  workingDirectory: string;
+  headCommit: string | null;
+  branch: string | null;
+  isDetachedHead: boolean;
+  isUnbornBranch: boolean;
+  isDirty: boolean;
+  stagedFileCount: number;
+  unstagedFileCount: number;
+  untrackedFileCount: number;
+  conflictedFileCount: number;
+  aheadCount: number | null;
+  behindCount: number | null;
+  gitVersion: string;
+  fileStats: GitFileStat[];
+}
+
+export type CapturedGitSnapshot = Omit<GitSnapshot, "repositoryId">;
+
+export interface GitChangeSummary {
+  startHead: string | null;
+  endHead: string | null;
+  branchChanged: boolean;
+  startDirty: boolean;
+  endDirty: boolean;
+  stagedFileCount: number;
+  unstagedFileCount: number;
+  untrackedFileCount: number;
+  conflictedFileCount: number;
+  filesChanged: number | null;
+  additions: number | null;
+  deletions: number | null;
+  binaryFiles: number | null;
+  renamedFiles: number | null;
+  newCommit: boolean | null;
+  baselineDirty: boolean;
+  attribution: "observed_changes" | "committed_net_change" | "unknown";
+  warnings: string[];
+}
+
+export interface TrackingRun {
+  id: string;
+  provider: Provider;
+  label: string | null;
+  workingDirectory: string;
+  repositoryId: number;
+  repositoryPath: string;
+  repositoryName: string;
+  startedAt: string;
+  endedAt: string | null;
+  status: TrackingRunStatus;
+  startSnapshotId: string;
+  endSnapshotId: string | null;
+  linkedSessionId: string | null;
+  linkConfidence: number | null;
+  linkConfidenceLevel: LinkConfidenceLevel | null;
+  linkMethod: SessionLinkMethod | null;
+  linkReasons: string[];
+  summary: GitChangeSummary | null;
+  warnings: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionGitLink {
+  id: string;
+  sessionId: string;
+  trackingRunId: string;
+  repositoryId: number;
+  confidenceScore: number;
+  confidenceLevel: LinkConfidenceLevel;
+  method: SessionLinkMethod;
+  reasons: string[];
+  createdAt: string;
+  unlinkedAt: string | null;
+  unlinkReason: string | null;
+}
 
 export interface Session {
   id: string;

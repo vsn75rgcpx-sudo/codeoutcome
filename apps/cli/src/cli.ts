@@ -11,6 +11,7 @@ import {
   buildUsageReport,
   reconcileUsage,
   runImport,
+  type ProviderProcessRunner,
   type CostSummary,
   type UsagePeriod,
   type UsageReport,
@@ -22,6 +23,7 @@ import {
   inspectDatabase,
   SessionDatabase,
 } from "@agentledger/database";
+import type { GitProcessRunner } from "@agentledger/git-tracker";
 import {
   redactHomePath,
   type Provider,
@@ -29,6 +31,8 @@ import {
   type Session,
   type SessionAdapter,
 } from "@agentledger/shared";
+
+import { PHASE3_HELP, runPhase3Cli } from "./tracking-cli.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,6 +49,10 @@ export interface CliOptions {
   databaseFile?: string;
   now?: () => Date;
   io?: CliIo;
+  workingDirectory?: string;
+  gitRunner?: GitProcessRunner;
+  processRunner?: ProviderProcessRunner;
+  codexExecutable?: string;
 }
 
 type DoctorStatus = "PASS" | "WARN" | "FAIL";
@@ -362,7 +370,7 @@ async function doctorChecks(
     detail: `schema ${inspection.currentMigrationVersion}/${inspection.latestMigrationVersion}; ${inspection.pendingMigrations} pending`,
     solution:
       !inspection.exists || inspection.pendingMigrations > 0
-        ? "Run `agentledger import`; pending migrations are applied transactionally."
+        ? "Run a writable command such as `agentledger git snapshot` or `agentledger import`; migrations are transactional."
         : null,
   });
   const dataDirectory = path.dirname(databaseFile);
@@ -411,6 +419,26 @@ async function doctorChecks(
         ? "Review import warnings, then run `agentledger import` again."
         : null,
   });
+  if (inspection.exists && inspection.pendingMigrations === 0) {
+    const database = new SessionDatabase(databaseFile, { readOnly: true });
+    try {
+      const activeRuns = database.activeTrackingRunCount();
+      checks.push({
+        check: "Active tracking runs",
+        status: activeRuns > 0 ? "WARN" : "PASS",
+        detail:
+          activeRuns > 0
+            ? `${activeRuns} active tracking run(s) may require recovery`
+            : "No stale active tracking runs",
+        solution:
+          activeRuns > 0
+            ? "Run `agentledger track recover --list`, then recover or abandon the intended run."
+            : null,
+      });
+    } finally {
+      database.close();
+    }
+  }
   return checks;
 }
 
@@ -943,6 +971,7 @@ Usage:
   agentledger reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
   agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
   agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
+${PHASE3_HELP}
 
 AgentLedger reads source logs without modifying them and never stores prompt or response bodies.`;
 }
@@ -960,6 +989,19 @@ export async function runCli(
   const databaseFile =
     options.databaseFile ??
     getAgentLedgerPaths(environment, userHome, platform).databaseFile;
+  const phase3Result = await runPhase3Cli(arguments_, {
+    io,
+    databaseFile,
+    dataDirectory: path.dirname(databaseFile),
+    userHome,
+    workingDirectory: options.workingDirectory ?? process.cwd(),
+    now,
+    adapters,
+    gitRunner: options.gitRunner,
+    processRunner: options.processRunner,
+    codexExecutable: options.codexExecutable ?? "codex",
+  });
+  if (phase3Result !== null) return phase3Result;
   const [command = "help", ...commandArguments] = arguments_;
 
   switch (command) {

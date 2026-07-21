@@ -5,6 +5,19 @@ import { promisify } from "node:util";
 
 import { canonicalizePath, type Session } from "@agentledger/shared";
 
+export {
+  captureGitSnapshot,
+  compareGitSnapshots,
+  defaultGitProcessRunner,
+  NotGitRepositoryError,
+  parseNumstat,
+  repositoryInputFromSnapshot,
+  type CaptureGitSnapshotOptions,
+  type GitProcessOptions,
+  type GitProcessResult,
+  type GitProcessRunner,
+} from "./snapshot.js";
+
 const execFileAsync = promisify(execFile);
 
 interface GitCommandResult {

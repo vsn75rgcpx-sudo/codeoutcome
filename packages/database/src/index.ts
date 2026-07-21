@@ -7,9 +7,18 @@ import type {
   AccountingMethod,
   AccountingRole,
   AccountingStatus,
+  CapturedGitSnapshot,
+  GitChangeSummary,
+  GitFileStat,
+  GitSnapshot,
+  LinkConfidenceLevel,
   Provider,
   ProviderSelection,
   Session,
+  SessionGitLink,
+  SessionLinkMethod,
+  TrackingRun,
+  TrackingRunStatus,
   UsageEvent,
   UsageEventType,
 } from "@agentledger/shared";
@@ -126,6 +135,45 @@ export interface SessionAccountingUpdate {
   canonicalEventIds: readonly string[];
 }
 
+export interface StartTrackingRunInput {
+  id: string;
+  provider: Provider;
+  label: string | null;
+  workingDirectory: string;
+  repository: RepositoryInput;
+  startSnapshot: CapturedGitSnapshot;
+  startedAt: string;
+  createdAt: string;
+}
+
+export interface FinishTrackingRunInput {
+  trackingRunId: string;
+  endSnapshot: CapturedGitSnapshot;
+  endedAt: string;
+  status: Exclude<TrackingRunStatus, "active" | "abandoned">;
+  summary: GitChangeSummary;
+  warnings: readonly string[];
+  updatedAt: string;
+}
+
+export interface TrackingRunQuery {
+  status?: TrackingRunStatus;
+  since?: string;
+  workingDirectory?: string;
+  limit?: number;
+}
+
+export interface CreateSessionGitLinkInput {
+  id: string;
+  trackingRunId: string;
+  sessionId: string;
+  confidenceScore: number;
+  confidenceLevel: LinkConfidenceLevel;
+  method: SessionLinkMethod;
+  reasons: readonly string[];
+  createdAt: string;
+}
+
 interface SessionRow {
   id: unknown;
   provider: unknown;
@@ -207,6 +255,80 @@ interface SourceFileRow {
   last_imported_at: unknown;
 }
 
+interface GitSnapshotRow {
+  id: unknown;
+  repository_id: unknown;
+  repository_path: unknown;
+  captured_at: unknown;
+  trigger: unknown;
+  privacy_mode: unknown;
+  working_directory: unknown;
+  head_commit: unknown;
+  branch: unknown;
+  is_detached_head: unknown;
+  is_unborn_branch: unknown;
+  is_dirty: unknown;
+  staged_file_count: unknown;
+  unstaged_file_count: unknown;
+  untracked_file_count: unknown;
+  conflicted_file_count: unknown;
+  ahead_count: unknown;
+  behind_count: unknown;
+  git_version: unknown;
+}
+
+interface GitFileStatRow {
+  id: unknown;
+  snapshot_id: unknown;
+  relative_path: unknown;
+  previous_path: unknown;
+  change_type: unknown;
+  area: unknown;
+  additions: unknown;
+  deletions: unknown;
+  is_binary: unknown;
+  content_fingerprint: unknown;
+  path_fingerprint: unknown;
+}
+
+interface TrackingRunRow {
+  id: unknown;
+  provider: unknown;
+  label: unknown;
+  working_directory: unknown;
+  repository_id: unknown;
+  repository_path: unknown;
+  repository_name: unknown;
+  started_at: unknown;
+  ended_at: unknown;
+  status: unknown;
+  start_snapshot_id: unknown;
+  end_snapshot_id: unknown;
+  linked_session_id: unknown;
+  link_confidence: unknown;
+  link_confidence_level: unknown;
+  link_method: unknown;
+  link_reasons_json: unknown;
+  summary_json: unknown;
+  warnings_json: unknown;
+  created_at: unknown;
+  updated_at: unknown;
+}
+
+interface SessionGitLinkRow {
+  id: unknown;
+  session_id: unknown;
+  tracking_run_id: unknown;
+  repository_id: unknown;
+  confidence_score: unknown;
+  confidence_level: unknown;
+  method: unknown;
+  reasons_json: unknown;
+  created_at: unknown;
+  unlinked_at: unknown;
+  unlink_reason: unknown;
+}
+
 function nullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
@@ -281,6 +403,122 @@ function accountingRoleFrom(value: unknown): AccountingRole {
   return "informational";
 }
 
+function nullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function trackingStatusFrom(value: unknown): TrackingRunStatus {
+  if (
+    value === "active" ||
+    value === "completed" ||
+    value === "interrupted" ||
+    value === "failed" ||
+    value === "abandoned"
+  ) {
+    return value;
+  }
+  throw new Error(`Unsupported tracking status: ${String(value)}`);
+}
+
+function confidenceLevelFrom(value: unknown): LinkConfidenceLevel | null {
+  return value === "high" ||
+    value === "medium" ||
+    value === "low" ||
+    value === "ambiguous"
+    ? value
+    : null;
+}
+
+function linkMethodFrom(value: unknown): SessionLinkMethod | null {
+  return value === "automatic" || value === "manual" ? value : null;
+}
+
+function stringArrayFromJson(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function summaryFromJson(value: unknown): GitChangeSummary | null {
+  if (typeof value !== "string") return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return null;
+    }
+    const row = parsed as Record<string, unknown>;
+    const attribution =
+      row.attribution === "observed_changes" ||
+      row.attribution === "committed_net_change"
+        ? row.attribution
+        : "unknown";
+    return {
+      startHead: nullableString(row.startHead),
+      endHead: nullableString(row.endHead),
+      branchChanged: row.branchChanged === true,
+      startDirty: row.startDirty === true,
+      endDirty: row.endDirty === true,
+      stagedFileCount: safeNumber(row.stagedFileCount),
+      unstagedFileCount: safeNumber(row.unstagedFileCount),
+      untrackedFileCount: safeNumber(row.untrackedFileCount),
+      conflictedFileCount: safeNumber(row.conflictedFileCount),
+      filesChanged: nullableNumber(row.filesChanged),
+      additions: nullableNumber(row.additions),
+      deletions: nullableNumber(row.deletions),
+      binaryFiles: nullableNumber(row.binaryFiles),
+      renamedFiles: nullableNumber(row.renamedFiles),
+      newCommit: typeof row.newCommit === "boolean" ? row.newCommit : null,
+      baselineDirty: row.baselineDirty === true,
+      attribution,
+      warnings: Array.isArray(row.warnings)
+        ? row.warnings.filter(
+            (warning): warning is string => typeof warning === "string",
+          )
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function gitChangeTypeFrom(value: unknown): GitFileStat["changeType"] {
+  if (
+    value === "added" ||
+    value === "modified" ||
+    value === "deleted" ||
+    value === "renamed" ||
+    value === "copied" ||
+    value === "unmerged" ||
+    value === "untracked" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return "unknown";
+}
+
+function gitChangeAreaFrom(value: unknown): GitFileStat["area"] {
+  if (
+    value === "staged" ||
+    value === "unstaged" ||
+    value === "untracked" ||
+    value === "conflicted"
+  ) {
+    return value;
+  }
+  return "unstaged";
+}
+
 function minTimestamp(
   left: string | null,
   right: string | null,
@@ -340,6 +578,104 @@ function sessionFromRow(row: SessionRow): Session {
     sourceFile: requiredString(row.source_file, "unknown"),
     sourceFileHash: requiredString(row.source_file_hash, ""),
     importedAt: nullableString(row.imported_at),
+  };
+}
+
+function gitFileStatFromRow(row: GitFileStatRow): GitFileStat {
+  return {
+    id: requiredString(row.id, ""),
+    snapshotId: requiredString(row.snapshot_id, ""),
+    relativePath: nullableString(row.relative_path),
+    previousPath: nullableString(row.previous_path),
+    changeType: gitChangeTypeFrom(row.change_type),
+    area: gitChangeAreaFrom(row.area),
+    additions: nullableNumber(row.additions),
+    deletions: nullableNumber(row.deletions),
+    isBinary: safeNumber(row.is_binary) === 1,
+    contentFingerprint: nullableString(row.content_fingerprint),
+    pathFingerprint: requiredString(row.path_fingerprint, ""),
+  };
+}
+
+function snapshotFromRow(
+  row: GitSnapshotRow,
+  fileStats: GitFileStat[],
+): GitSnapshot {
+  const trigger =
+    row.trigger === "tracking_start" ||
+    row.trigger === "tracking_end" ||
+    row.trigger === "manual" ||
+    row.trigger === "recovery"
+      ? row.trigger
+      : "manual";
+  return {
+    id: requiredString(row.id, ""),
+    repositoryId: safeNumber(row.repository_id),
+    repositoryPath: requiredString(row.repository_path, ""),
+    capturedAt: requiredString(row.captured_at, ""),
+    trigger,
+    privacyMode: row.privacy_mode === "strict" ? "strict" : "git-metadata",
+    workingDirectory: requiredString(row.working_directory, ""),
+    headCommit: nullableString(row.head_commit),
+    branch: nullableString(row.branch),
+    isDetachedHead: safeNumber(row.is_detached_head) === 1,
+    isUnbornBranch: safeNumber(row.is_unborn_branch) === 1,
+    isDirty: safeNumber(row.is_dirty) === 1,
+    stagedFileCount: safeNumber(row.staged_file_count),
+    unstagedFileCount: safeNumber(row.unstaged_file_count),
+    untrackedFileCount: safeNumber(row.untracked_file_count),
+    conflictedFileCount: safeNumber(row.conflicted_file_count),
+    aheadCount: nullableNumber(row.ahead_count),
+    behindCount: nullableNumber(row.behind_count),
+    gitVersion: requiredString(row.git_version, "unknown"),
+    fileStats,
+  };
+}
+
+function trackingRunFromRow(row: TrackingRunRow): TrackingRun {
+  return {
+    id: requiredString(row.id, ""),
+    provider: providerFrom(row.provider),
+    label: nullableString(row.label),
+    workingDirectory: requiredString(row.working_directory, ""),
+    repositoryId: safeNumber(row.repository_id),
+    repositoryPath: requiredString(row.repository_path, ""),
+    repositoryName: requiredString(row.repository_name, "unknown"),
+    startedAt: requiredString(row.started_at, ""),
+    endedAt: nullableString(row.ended_at),
+    status: trackingStatusFrom(row.status),
+    startSnapshotId: requiredString(row.start_snapshot_id, ""),
+    endSnapshotId: nullableString(row.end_snapshot_id),
+    linkedSessionId: nullableString(row.linked_session_id),
+    linkConfidence: nullableNumber(row.link_confidence),
+    linkConfidenceLevel: confidenceLevelFrom(row.link_confidence_level),
+    linkMethod: linkMethodFrom(row.link_method),
+    linkReasons: stringArrayFromJson(row.link_reasons_json),
+    summary: summaryFromJson(row.summary_json),
+    warnings: stringArrayFromJson(row.warnings_json),
+    createdAt: requiredString(row.created_at, ""),
+    updatedAt: requiredString(row.updated_at, ""),
+  };
+}
+
+function sessionGitLinkFromRow(row: SessionGitLinkRow): SessionGitLink {
+  const confidenceLevel = confidenceLevelFrom(row.confidence_level);
+  const method = linkMethodFrom(row.method);
+  if (confidenceLevel === null || method === null) {
+    throw new Error("Invalid session Git link row");
+  }
+  return {
+    id: requiredString(row.id, ""),
+    sessionId: requiredString(row.session_id, ""),
+    trackingRunId: requiredString(row.tracking_run_id, ""),
+    repositoryId: safeNumber(row.repository_id),
+    confidenceScore: safeNumber(row.confidence_score),
+    confidenceLevel,
+    method,
+    reasons: stringArrayFromJson(row.reasons_json),
+    createdAt: requiredString(row.created_at, ""),
+    unlinkedAt: nullableString(row.unlinked_at),
+    unlinkReason: nullableString(row.unlink_reason),
   };
 }
 
@@ -414,7 +750,7 @@ export function inspectDatabase(databaseFile: string): DatabaseInspection {
       message:
         writableParent === null
           ? `database parent is not writable (${path.dirname(databaseFile)})`
-          : `ready; database will be created on first import (${databaseFile})`,
+          : `ready; database will be created by the first writable command (${databaseFile})`,
       currentMigrationVersion: 0,
       latestMigrationVersion: LATEST_MIGRATION_VERSION,
       pendingMigrations: LATEST_MIGRATION_VERSION,
@@ -1039,6 +1375,434 @@ export class SessionDatabase {
       .all(...parameters) as unknown as SessionRow[];
 
     return rows.map(sessionFromRow);
+  }
+
+  #insertGitSnapshot(
+    snapshot: CapturedGitSnapshot,
+    repositoryId: number,
+  ): GitSnapshot {
+    this.#database
+      .prepare(
+        `
+        INSERT INTO git_snapshots (
+          id, repository_id, captured_at, trigger, privacy_mode,
+          working_directory, head_commit, branch, is_detached_head,
+          is_unborn_branch, is_dirty, staged_file_count,
+          unstaged_file_count, untracked_file_count, conflicted_file_count,
+          ahead_count, behind_count, git_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .run(
+        snapshot.id,
+        repositoryId,
+        snapshot.capturedAt,
+        snapshot.trigger,
+        snapshot.privacyMode,
+        snapshot.workingDirectory,
+        snapshot.headCommit,
+        snapshot.branch,
+        snapshot.isDetachedHead ? 1 : 0,
+        snapshot.isUnbornBranch ? 1 : 0,
+        snapshot.isDirty ? 1 : 0,
+        snapshot.stagedFileCount,
+        snapshot.unstagedFileCount,
+        snapshot.untrackedFileCount,
+        snapshot.conflictedFileCount,
+        snapshot.aheadCount,
+        snapshot.behindCount,
+        snapshot.gitVersion,
+      );
+    const insertStat = this.#database.prepare(`
+      INSERT INTO git_file_stats (
+        id, snapshot_id, relative_path, previous_path, change_type, area,
+        additions, deletions, is_binary, content_fingerprint, path_fingerprint
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const stat of snapshot.fileStats) {
+      insertStat.run(
+        stat.id,
+        snapshot.id,
+        stat.relativePath,
+        stat.previousPath,
+        stat.changeType,
+        stat.area,
+        stat.additions,
+        stat.deletions,
+        stat.isBinary ? 1 : 0,
+        stat.contentFingerprint,
+        stat.pathFingerprint,
+      );
+    }
+    return { ...snapshot, repositoryId };
+  }
+
+  saveGitSnapshot(
+    snapshot: CapturedGitSnapshot,
+    repository: RepositoryInput,
+  ): GitSnapshot {
+    this.#assertWritable("saveGitSnapshot");
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      const repositoryId = this.upsertRepository(
+        repository,
+        snapshot.capturedAt,
+      );
+      const stored = this.#insertGitSnapshot(snapshot, repositoryId);
+      this.#database.exec("COMMIT;");
+      return stored;
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+
+  startTrackingRun(input: StartTrackingRunInput): TrackingRun {
+    this.#assertWritable("startTrackingRun");
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      const repositoryId = this.upsertRepository(
+        input.repository,
+        input.createdAt,
+      );
+      this.#insertGitSnapshot(input.startSnapshot, repositoryId);
+      this.#database
+        .prepare(
+          `
+          INSERT INTO tracking_runs (
+            id, provider, label, working_directory, repository_id,
+            started_at, status, start_snapshot_id, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+        `,
+        )
+        .run(
+          input.id,
+          input.provider,
+          input.label,
+          input.workingDirectory,
+          repositoryId,
+          input.startedAt,
+          input.startSnapshot.id,
+          input.createdAt,
+          input.createdAt,
+        );
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      if (
+        error instanceof Error &&
+        error.message.includes("tracking_runs_one_active_directory_idx")
+      ) {
+        throw new Error(
+          `An active tracking run already exists for ${input.workingDirectory}`,
+        );
+      }
+      throw error;
+    }
+    const run = this.getTrackingRun(input.id);
+    if (run === null) throw new Error("Tracking run insert failed");
+    return run;
+  }
+
+  finishTrackingRun(input: FinishTrackingRunInput): TrackingRun {
+    this.#assertWritable("finishTrackingRun");
+    const current = this.getTrackingRun(input.trackingRunId);
+    if (current === null) throw new Error("Tracking run not found");
+    if (current.status !== "active") {
+      throw new Error(`Tracking run is not active (${current.status})`);
+    }
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#insertGitSnapshot(input.endSnapshot, current.repositoryId);
+      this.#database
+        .prepare(
+          `
+          UPDATE tracking_runs SET
+            ended_at = ?, status = ?, end_snapshot_id = ?, summary_json = ?,
+            warnings_json = ?, updated_at = ?
+          WHERE id = ? AND status = 'active'
+        `,
+        )
+        .run(
+          input.endedAt,
+          input.status,
+          input.endSnapshot.id,
+          JSON.stringify(input.summary),
+          JSON.stringify(input.warnings),
+          input.updatedAt,
+          input.trackingRunId,
+        );
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.getTrackingRun(input.trackingRunId)!;
+  }
+
+  abandonTrackingRun(
+    trackingRunId: string,
+    updatedAt: string,
+    warning = "tracking_run_abandoned_by_user",
+  ): TrackingRun {
+    this.#assertWritable("abandonTrackingRun");
+    const result = this.#database
+      .prepare(
+        `
+        UPDATE tracking_runs SET status = 'abandoned', warnings_json = ?,
+          updated_at = ? WHERE id = ? AND status = 'active'
+      `,
+      )
+      .run(JSON.stringify([warning]), updatedAt, trackingRunId);
+    if (result.changes !== 1) {
+      throw new Error("Active tracking run not found");
+    }
+    return this.getTrackingRun(trackingRunId)!;
+  }
+
+  getGitSnapshot(snapshotId: string): GitSnapshot | null {
+    const row = this.#database
+      .prepare(
+        `
+        SELECT g.*, r.canonical_path AS repository_path
+        FROM git_snapshots g
+        JOIN repositories r ON r.id = g.repository_id
+        WHERE g.id = ?
+      `,
+      )
+      .get(snapshotId) as GitSnapshotRow | undefined;
+    if (row === undefined) return null;
+    const stats = this.#database
+      .prepare(
+        "SELECT * FROM git_file_stats WHERE snapshot_id = ? ORDER BY area, path_fingerprint",
+      )
+      .all(snapshotId) as unknown as GitFileStatRow[];
+    return snapshotFromRow(row, stats.map(gitFileStatFromRow));
+  }
+
+  listGitSnapshots(limit = 20): GitSnapshot[] {
+    const safeLimit = Math.max(1, Math.min(10_000, Math.trunc(limit)));
+    const rows = this.#database
+      .prepare(
+        `
+        SELECT g.*, r.canonical_path AS repository_path
+        FROM git_snapshots g
+        JOIN repositories r ON r.id = g.repository_id
+        ORDER BY g.captured_at DESC LIMIT ?
+      `,
+      )
+      .all(safeLimit) as unknown as GitSnapshotRow[];
+    return rows.map((row) => {
+      const id = requiredString(row.id, "");
+      const stats = this.#database
+        .prepare(
+          "SELECT * FROM git_file_stats WHERE snapshot_id = ? ORDER BY area, path_fingerprint",
+        )
+        .all(id) as unknown as GitFileStatRow[];
+      return snapshotFromRow(row, stats.map(gitFileStatFromRow));
+    });
+  }
+
+  getTrackingRun(trackingRunId: string): TrackingRun | null {
+    const row = this.#database
+      .prepare(
+        `
+        SELECT t.*, r.canonical_path AS repository_path,
+          r.name AS repository_name
+        FROM tracking_runs t
+        JOIN repositories r ON r.id = t.repository_id
+        WHERE t.id = ?
+      `,
+      )
+      .get(trackingRunId) as TrackingRunRow | undefined;
+    return row === undefined ? null : trackingRunFromRow(row);
+  }
+
+  listTrackingRuns(query: TrackingRunQuery = {}): TrackingRun[] {
+    const conditions: string[] = [];
+    const parameters: Array<string | number> = [];
+    if (query.status !== undefined) {
+      conditions.push("t.status = ?");
+      parameters.push(query.status);
+    }
+    if (query.since !== undefined) {
+      conditions.push("t.started_at >= ?");
+      parameters.push(query.since);
+    }
+    if (query.workingDirectory !== undefined) {
+      conditions.push("t.working_directory = ?");
+      parameters.push(query.workingDirectory);
+    }
+    const limit = Math.max(1, Math.min(10_000, Math.trunc(query.limit ?? 100)));
+    parameters.push(limit);
+    const where =
+      conditions.length === 0 ? "" : `WHERE ${conditions.join(" AND ")}`;
+    const rows = this.#database
+      .prepare(
+        `
+        SELECT t.*, r.canonical_path AS repository_path,
+          r.name AS repository_name
+        FROM tracking_runs t
+        JOIN repositories r ON r.id = t.repository_id
+        ${where}
+        ORDER BY t.started_at DESC LIMIT ?
+      `,
+      )
+      .all(...parameters) as unknown as TrackingRunRow[];
+    return rows.map(trackingRunFromRow);
+  }
+
+  activeTrackingRun(workingDirectory?: string): TrackingRun | null {
+    return (
+      this.listTrackingRuns({
+        status: "active",
+        workingDirectory,
+        limit: 1,
+      })[0] ?? null
+    );
+  }
+
+  activeTrackingRunCount(): number {
+    const row = this.#database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM tracking_runs WHERE status = 'active'",
+      )
+      .get() as { count?: unknown } | undefined;
+    return safeNumber(row?.count);
+  }
+
+  setTrackingLinkDecision(
+    trackingRunId: string,
+    decision: {
+      confidenceScore: number;
+      confidenceLevel: LinkConfidenceLevel;
+      reasons: readonly string[];
+      updatedAt: string;
+    },
+  ): void {
+    this.#assertWritable("setTrackingLinkDecision");
+    this.#database
+      .prepare(
+        `
+        UPDATE tracking_runs SET linked_session_id = NULL,
+          link_confidence = ?, link_confidence_level = ?, link_method = NULL,
+          link_reasons_json = ?, updated_at = ? WHERE id = ?
+      `,
+      )
+      .run(
+        decision.confidenceScore,
+        decision.confidenceLevel,
+        JSON.stringify(decision.reasons),
+        decision.updatedAt,
+        trackingRunId,
+      );
+  }
+
+  createSessionGitLink(input: CreateSessionGitLinkInput): SessionGitLink {
+    this.#assertWritable("createSessionGitLink");
+    const run = this.getTrackingRun(input.trackingRunId);
+    if (run === null) throw new Error("Tracking run not found");
+    if (!this.sessionExists(input.sessionId))
+      throw new Error("Session not found");
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#database
+        .prepare(
+          `
+          UPDATE session_git_links SET unlinked_at = ?,
+            unlink_reason = 'superseded_by_new_link'
+          WHERE tracking_run_id = ? AND unlinked_at IS NULL
+        `,
+        )
+        .run(input.createdAt, input.trackingRunId);
+      this.#database
+        .prepare(
+          `
+          INSERT INTO session_git_links (
+            id, session_id, tracking_run_id, repository_id,
+            confidence_score, confidence_level, method, reasons_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        )
+        .run(
+          input.id,
+          input.sessionId,
+          input.trackingRunId,
+          run.repositoryId,
+          input.confidenceScore,
+          input.confidenceLevel,
+          input.method,
+          JSON.stringify(input.reasons),
+          input.createdAt,
+        );
+      this.#database
+        .prepare(
+          `
+          UPDATE tracking_runs SET linked_session_id = ?, link_confidence = ?,
+            link_confidence_level = ?, link_method = ?, link_reasons_json = ?,
+            updated_at = ? WHERE id = ?
+        `,
+        )
+        .run(
+          input.sessionId,
+          input.confidenceScore,
+          input.confidenceLevel,
+          input.method,
+          JSON.stringify(input.reasons),
+          input.createdAt,
+          input.trackingRunId,
+        );
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+    return this.listSessionGitLinks(input.trackingRunId)[0]!;
+  }
+
+  unlinkTrackingRun(
+    trackingRunId: string,
+    unlinkedAt: string,
+    reason = "manual_unlink",
+  ): void {
+    this.#assertWritable("unlinkTrackingRun");
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      this.#database
+        .prepare(
+          `
+          UPDATE session_git_links SET unlinked_at = ?, unlink_reason = ?
+          WHERE tracking_run_id = ? AND unlinked_at IS NULL
+        `,
+        )
+        .run(unlinkedAt, reason, trackingRunId);
+      this.#database
+        .prepare(
+          `
+          UPDATE tracking_runs SET linked_session_id = NULL,
+            link_confidence = NULL, link_confidence_level = NULL,
+            link_method = NULL, link_reasons_json = '[]', updated_at = ?
+          WHERE id = ?
+        `,
+        )
+        .run(unlinkedAt, trackingRunId);
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+
+  listSessionGitLinks(trackingRunId: string): SessionGitLink[] {
+    const rows = this.#database
+      .prepare(
+        `
+        SELECT * FROM session_git_links WHERE tracking_run_id = ?
+        ORDER BY created_at DESC
+      `,
+      )
+      .all(trackingRunId) as unknown as SessionGitLinkRow[];
+    return rows.map(sessionGitLinkFromRow);
   }
 
   usageEventCount(): number {
