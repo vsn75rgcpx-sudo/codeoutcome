@@ -24,6 +24,8 @@ interface LegacySessionRow {
   source_file: unknown;
 }
 
+export const REPARSE_REQUIRED_CHECKPOINT = "phase-2.5-reparse-required";
+
 const MIGRATIONS: readonly Migration[] = [
   {
     version: 1,
@@ -124,6 +126,81 @@ const MIGRATIONS: readonly Migration[] = [
 
       CREATE INDEX source_files_session_id_idx ON source_files(session_id);
       CREATE INDEX source_files_provider_idx ON source_files(provider);
+    `,
+  },
+  {
+    version: 3,
+    name: "canonical_token_accounting",
+    sql: `
+      ALTER TABLE sessions ADD COLUMN accounting_method TEXT NOT NULL
+        DEFAULT 'unavailable'
+        CHECK (accounting_method IN (
+          'cumulative_snapshot', 'incremental_events', 'ambiguous', 'unavailable'
+        ));
+      ALTER TABLE sessions ADD COLUMN accounting_status TEXT NOT NULL
+        DEFAULT 'warning'
+        CHECK (accounting_status IN ('verified', 'warning', 'invalid'));
+      ALTER TABLE sessions ADD COLUMN accounting_version TEXT NOT NULL
+        DEFAULT 'legacy-v2-pending-reconciliation';
+      ALTER TABLE sessions ADD COLUMN uncached_input_tokens INTEGER NOT NULL
+        DEFAULT 0 CHECK (uncached_input_tokens >= 0);
+      ALTER TABLE sessions ADD COLUMN last_usage_event_at TEXT;
+
+      ALTER TABLE usage_events ADD COLUMN accounting_role TEXT NOT NULL
+        DEFAULT 'informational'
+        CHECK (accounting_role IN (
+          'cumulative_snapshot', 'incremental', 'informational'
+        ));
+      ALTER TABLE usage_events ADD COLUMN is_canonical INTEGER NOT NULL
+        DEFAULT 0 CHECK (is_canonical IN (0, 1));
+      ALTER TABLE usage_events ADD COLUMN provider_event_id TEXT;
+      ALTER TABLE usage_events ADD COLUMN snapshot_sequence INTEGER
+        CHECK (snapshot_sequence IS NULL OR snapshot_sequence >= 0);
+      ALTER TABLE usage_events ADD COLUMN reasoning_output_tokens INTEGER NOT NULL
+        DEFAULT 0 CHECK (reasoning_output_tokens >= 0);
+      ALTER TABLE usage_events ADD COLUMN reported_total_tokens INTEGER
+        CHECK (reported_total_tokens IS NULL OR reported_total_tokens >= 0);
+      ALTER TABLE usage_events ADD COLUMN has_negative_values INTEGER NOT NULL
+        DEFAULT 0 CHECK (has_negative_values IN (0, 1));
+
+      UPDATE usage_events SET
+        accounting_role = CASE
+          WHEN event_type = 'cumulative' THEN 'cumulative_snapshot'
+          ELSE 'incremental'
+        END,
+        snapshot_sequence = source_offset;
+
+      UPDATE sessions SET
+        accounting_method = CASE
+          WHEN EXISTS (
+            SELECT 1 FROM usage_events u
+            WHERE u.session_id = sessions.id AND u.event_type = 'cumulative'
+          ) THEN 'cumulative_snapshot'
+          WHEN EXISTS (
+            SELECT 1 FROM usage_events u WHERE u.session_id = sessions.id
+          ) THEN 'incremental_events'
+          ELSE 'unavailable'
+        END,
+        accounting_status = 'warning',
+        accounting_version = 'legacy-v2-pending-reconciliation',
+        uncached_input_tokens = MAX(input_tokens - cached_input_tokens, 0),
+        last_usage_event_at = (
+          SELECT MAX(u.event_time) FROM usage_events u
+          WHERE u.session_id = sessions.id
+        );
+
+      CREATE INDEX usage_events_accounting_role_idx
+        ON usage_events(session_id, accounting_role);
+      CREATE INDEX usage_events_canonical_idx
+        ON usage_events(session_id, is_canonical);
+      CREATE INDEX usage_events_provider_event_id_idx
+        ON usage_events(provider_event_id)
+        WHERE provider_event_id IS NOT NULL;
+
+      -- The v2 parser discarded paired last_token_usage payloads. Force one
+      -- safe full-source rebuild on the next import so v3 audit metadata is
+      -- complete, while preserving current rows until that import succeeds.
+      UPDATE source_files SET processed_hash = '${REPARSE_REQUIRED_CHECKPOINT}';
     `,
   },
 ] as const;

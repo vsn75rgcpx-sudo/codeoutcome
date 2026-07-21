@@ -30,6 +30,8 @@ Run the CLI from this workspace:
 pnpm cli doctor
 pnpm cli import --dry-run
 pnpm cli import --provider all
+pnpm cli audit-usage --provider codex --top 20
+pnpm cli reconcile-usage --provider codex --dry-run
 pnpm cli sessions --limit 10
 pnpm cli usage --weekly
 ```
@@ -42,14 +44,18 @@ published package exposes the same program as `agentledger`.
 ```text
 agentledger doctor [--json]
 agentledger import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
+agentledger audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
+agentledger reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
 agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
 agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
 ```
 
 `doctor` is diagnostic only: it does not create the database, run migrations,
 or modify user configuration. `import` is the only command that reads source
-logs and writes imported metadata. `sessions` and `usage` query the persisted
-database.
+logs. `audit-usage` inspects normalized events without reading message bodies.
+`reconcile-usage` transactionally rebuilds session totals from those events;
+its `--dry-run` mode does not change accounting rows. `sessions` and `usage`
+query the persisted database.
 
 Default paths:
 
@@ -106,6 +112,18 @@ accepts conservative older `usage` locations.
 Both adapters tolerate unknown fields, missing metadata, malformed complete
 lines, and a truncated final line. Very large files are processed line by line
 from the last verified byte checkpoint instead of being loaded into memory.
+
+Codex `total_token_usage` is treated as a cumulative session snapshot. The last
+valid snapshot by event time is canonical; historical snapshots remain
+available for audit but are never added together. A paired `last_token_usage`
+payload is informational. It is summed only when no cumulative snapshot exists.
+Mixed ranges or decreasing cumulative counters are marked `ambiguous` rather
+than silently combined.
+
+Cached input is normally a subset of Input, and reasoning output is normally a
+subset of Output. Therefore `Total = Input + Output`; Cache and reasoning are
+not added again. `usage` reports Input, Uncached Input, Cached Input, Output,
+and Total separately.
 
 See [Usage accounting](docs/usage-accounting.md) for exact token semantics,
 incremental-import behavior, and known risks. See

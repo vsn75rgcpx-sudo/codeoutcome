@@ -1,10 +1,11 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
-import type {
-  ImportRunSummary,
-  RepositoryInput,
-  SessionDatabase,
+import {
+  REPARSE_REQUIRED_CHECKPOINT,
+  type ImportRunSummary,
+  type RepositoryInput,
+  type SessionDatabase,
 } from "@agentledger/database";
 import { enrichSessionWithGit } from "@agentledger/git-tracker";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@agentledger/shared";
 
 import { DEFAULT_PRICING_CATALOG, type PricingCatalog } from "./pricing.js";
-import { accountUsageEvents } from "./usage.js";
+import { analyzeUsageEvents } from "./accounting.js";
 
 export interface ImportWarning {
   provider: Provider;
@@ -134,7 +135,8 @@ export async function runImport(options: ImportOptions): Promise<ImportReport> {
           !dryRun &&
           oldState !== null &&
           oldState.fileSize === metadata.size &&
-          oldState.fileMtimeMs === Math.trunc(metadata.mtimeMs)
+          oldState.fileMtimeMs === Math.trunc(metadata.mtimeMs) &&
+          oldState.processedHash !== REPARSE_REQUIRED_CHECKPOINT
         ) {
           skippedSessions += 1;
           continue;
@@ -242,13 +244,30 @@ export async function runImport(options: ImportOptions): Promise<ImportReport> {
           }
 
           for (const sessionId of mutation.affectedSessionIds) {
+            const storedSession = database.getSession(sessionId);
+            if (storedSession === null) continue;
             const events = database.getUsageEvents(sessionId);
-            const usage = accountUsageEvents(
+            const usage = analyzeUsageEvents(
+              storedSession.provider,
+              storedSession.model,
               events,
-              enriched.session.model,
               options.pricingCatalog ?? DEFAULT_PRICING_CATALOG,
             );
-            database.updateSessionUsage(sessionId, usage);
+            database.applyUsageReconciliation([
+              {
+                sessionId,
+                inputTokens: usage.inputTokens,
+                outputTokens: usage.outputTokens,
+                cachedInputTokens: usage.cachedInputTokens,
+                uncachedInputTokens: usage.uncachedInputTokens,
+                estimatedCost: usage.estimatedCost,
+                accountingMethod: usage.accountingMethod,
+                accountingStatus: usage.accountingStatus,
+                accountingVersion: usage.accountingVersion,
+                lastUsageEventAt: usage.lastUsageEventAt,
+                canonicalEventIds: usage.canonicalEventIds,
+              },
+            ]);
             for (const warning of usage.warnings) {
               warnings.push({
                 provider: adapter.provider,

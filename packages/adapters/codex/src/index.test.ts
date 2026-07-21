@@ -21,10 +21,20 @@ describe("CodexAdapter", () => {
       outputTokens: 44,
       cachedInputTokens: 50,
     });
-    expect(parsed.usageEvents).toHaveLength(2);
+    expect(parsed.usageEvents).toHaveLength(4);
     expect(
-      parsed.usageEvents.every((event) => event.eventType === "cumulative"),
+      parsed.usageEvents.every(
+        (event) =>
+          event.accountingRole === "cumulative_snapshot" ||
+          event.accountingRole === "informational",
+      ),
     ).toBe(true);
+    expect(parsed.session.uncachedInputTokens).toBe(200);
+    expect(
+      parsed.usageEvents.filter(
+        (event) => event.accountingRole === "informational",
+      ),
+    ).toHaveLength(2);
     expect(JSON.stringify(parsed)).not.toContain("redacted response");
   });
 

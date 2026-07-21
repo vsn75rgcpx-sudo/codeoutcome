@@ -117,13 +117,50 @@ describe("CLI JSON output", () => {
       totals: {
         sessions: 1,
         inputTokens: 25,
+        uncachedInputTokens: 20,
         outputTokens: 4,
         totalTokens: 29,
       },
       pricing: { version: "local-unpriced-v1" },
     });
+
+    const auditOutput = memoryIo();
+    await runCli(
+      ["audit-usage", "--provider", "claude-code", "--top", "20", "--json"],
+      {
+        databaseFile,
+        io: auditOutput.io,
+        userHome: directory,
+      },
+    );
+    expect(JSON.parse(auditOutput.stdout[0] ?? "{}")).toMatchObject({
+      checkedSessions: 1,
+      sessions: [
+        {
+          accountingMethod: "incremental_events",
+          inputTokens: 25,
+          totalTokens: 29,
+        },
+      ],
+    });
+
+    const reconcileOutput = memoryIo();
+    await runCli(
+      ["reconcile-usage", "--provider", "claude-code", "--dry-run", "--json"],
+      { databaseFile, io: reconcileOutput.io },
+    );
+    expect(JSON.parse(reconcileOutput.stdout[0] ?? "{}")).toMatchObject({
+      checkedSessions: 1,
+      modifiedSessions: 0,
+      dryRun: true,
+    });
     expect(
-      `${sessionsOutput.stdout.join("\n")}\n${usageOutput.stdout.join("\n")}`,
+      [
+        ...sessionsOutput.stdout,
+        ...usageOutput.stdout,
+        ...auditOutput.stdout,
+        ...reconcileOutput.stdout,
+      ].join("\n"),
     ).not.toContain("secret response fixture");
   });
 });

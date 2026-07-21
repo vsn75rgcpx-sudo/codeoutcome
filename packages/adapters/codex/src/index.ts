@@ -24,13 +24,42 @@ interface UsageTotals {
   input: number;
   output: number;
   cached: number;
+  reasoning: number;
+  reportedTotal: number | null;
+  hasNegativeValues: boolean;
+}
+
+function rawTokenCount(
+  record: JsonRecord | undefined,
+  ...keys: string[]
+): number | undefined {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.trunc(value);
+    }
+  }
+  return undefined;
 }
 
 function tokenCount(record: JsonRecord | undefined, ...keys: string[]): number {
-  return Math.trunc(firstNumber(...keys.map((key) => record?.[key])) ?? 0);
+  return Math.max(0, rawTokenCount(record, ...keys) ?? 0);
 }
 
 function usageTotals(record: JsonRecord | undefined): UsageTotals {
+  const rawReportedTotal = rawTokenCount(record, "total_tokens", "totalTokens");
+  const rawValues = [
+    rawTokenCount(record, "input_tokens", "inputTokens"),
+    rawTokenCount(record, "output_tokens", "outputTokens"),
+    rawTokenCount(
+      record,
+      "cached_input_tokens",
+      "cache_read_input_tokens",
+      "cachedInputTokens",
+    ),
+    rawTokenCount(record, "reasoning_output_tokens", "reasoningOutputTokens"),
+    rawTokenCount(record, "total_tokens", "totalTokens"),
+  ];
   return {
     input: tokenCount(record, "input_tokens", "inputTokens"),
     output: tokenCount(record, "output_tokens", "outputTokens"),
@@ -40,30 +69,60 @@ function usageTotals(record: JsonRecord | undefined): UsageTotals {
       "cache_read_input_tokens",
       "cachedInputTokens",
     ),
+    reasoning: tokenCount(
+      record,
+      "reasoning_output_tokens",
+      "reasoningOutputTokens",
+    ),
+    reportedTotal:
+      rawReportedTotal === undefined ? null : Math.max(0, rawReportedTotal),
+    hasNegativeValues: rawValues.some(
+      (value) => value !== undefined && value < 0,
+    ),
   };
 }
 
 function summarizeEvents(events: readonly UsageEvent[]): UsageTotals {
-  const cumulative = events.filter((event) => event.eventType === "cumulative");
+  const cumulative = events.filter(
+    (event) => event.accountingRole === "cumulative_snapshot",
+  );
   if (cumulative.length > 0) {
-    return cumulative.reduce<UsageTotals>(
-      (totals, event) => ({
-        input: Math.max(totals.input, event.inputTokens),
-        output: Math.max(totals.output, event.outputTokens),
-        cached: Math.max(totals.cached, event.cachedInputTokens),
-      }),
-      { input: 0, output: 0, cached: 0 },
-    );
+    const latest = cumulative.at(-1);
+    if (latest !== undefined) {
+      return {
+        input: latest.inputTokens,
+        output: latest.outputTokens,
+        cached: latest.cachedInputTokens,
+        reasoning: latest.reasoningOutputTokens,
+        reportedTotal: latest.reportedTotalTokens,
+        hasNegativeValues: latest.hasNegativeValues,
+      };
+    }
   }
 
-  return events.reduce<UsageTotals>(
-    (totals, event) => ({
-      input: totals.input + event.inputTokens,
-      output: totals.output + event.outputTokens,
-      cached: totals.cached + event.cachedInputTokens,
-    }),
-    { input: 0, output: 0, cached: 0 },
-  );
+  return events
+    .filter((event) => event.accountingRole === "incremental")
+    .reduce<UsageTotals>(
+      (totals, event) => ({
+        input: totals.input + event.inputTokens,
+        output: totals.output + event.outputTokens,
+        cached: totals.cached + event.cachedInputTokens,
+        reasoning: totals.reasoning + event.reasoningOutputTokens,
+        reportedTotal:
+          totals.reportedTotal === null || event.reportedTotalTokens === null
+            ? null
+            : totals.reportedTotal + event.reportedTotalTokens,
+        hasNegativeValues: totals.hasNegativeValues || event.hasNegativeValues,
+      }),
+      {
+        input: 0,
+        output: 0,
+        cached: 0,
+        reasoning: 0,
+        reportedTotal: 0,
+        hasNegativeValues: false,
+      },
+    );
 }
 
 export class CodexAdapter implements SessionAdapter {
@@ -138,44 +197,53 @@ export class CodexAdapter implements SessionAdapter {
         startedAt = bounds.start;
         endedAt = bounds.end;
 
-        const eventType: UsageEventType | undefined =
-          totalUsage !== undefined
-            ? "cumulative"
-            : lastUsage !== undefined
-              ? "incremental"
-              : undefined;
-        const usage = totalUsage ?? lastUsage;
-        if (eventType === undefined || usage === undefined) {
+        if (totalUsage === undefined && lastUsage === undefined) {
           return;
         }
 
-        const totals = usageTotals(usage);
-        const estimatedCost =
-          firstNumber(
-            payload?.estimated_cost,
-            info?.estimated_cost,
-            usage.estimated_cost,
-            entry.estimated_cost,
-          ) ?? null;
-        if (
-          totals.input === 0 &&
-          totals.output === 0 &&
-          totals.cached === 0 &&
-          estimatedCost === null
-        ) {
-          return;
+        const providerEventId =
+          firstString(entry.id, payload?.event_id, payload?.id) ?? null;
+        const appendUsage = (
+          usage: JsonRecord,
+          eventType: UsageEventType,
+          accountingRole: UsageEvent["accountingRole"],
+        ): void => {
+          const totals = usageTotals(usage);
+          const estimatedCost =
+            firstNumber(
+              payload?.estimated_cost,
+              info?.estimated_cost,
+              usage.estimated_cost,
+              entry.estimated_cost,
+            ) ?? null;
+          pendingEvents.push({
+            sourceFile,
+            sourceOffset: position.startOffset,
+            eventTime: eventTime ?? null,
+            eventType,
+            accountingRole,
+            isCanonical: false,
+            providerEventId,
+            snapshotSequence: position.startOffset,
+            inputTokens: totals.input,
+            outputTokens: totals.output,
+            cachedInputTokens: totals.cached,
+            reasoningOutputTokens: totals.reasoning,
+            reportedTotalTokens: totals.reportedTotal,
+            hasNegativeValues: totals.hasNegativeValues,
+            estimatedCost,
+          });
+        };
+        if (totalUsage !== undefined) {
+          appendUsage(totalUsage, "cumulative", "cumulative_snapshot");
         }
-
-        pendingEvents.push({
-          sourceFile,
-          sourceOffset: position.startOffset,
-          eventTime: eventTime ?? null,
-          eventType,
-          inputTokens: totals.input,
-          outputTokens: totals.output,
-          cachedInputTokens: totals.cached,
-          estimatedCost,
-        });
+        if (lastUsage !== undefined) {
+          appendUsage(
+            lastUsage,
+            "incremental",
+            totalUsage === undefined ? "incremental" : "informational",
+          );
+        }
       },
     );
 
@@ -190,13 +258,13 @@ export class CodexAdapter implements SessionAdapter {
         this.provider,
         sourceFile,
         event.sourceOffset,
-        event.eventType,
+        event.accountingRole,
       ),
       sessionId,
     }));
     const usage = summarizeEvents(usageEvents);
     const cumulativeCosts = usageEvents
-      .filter((event) => event.eventType === "cumulative")
+      .filter((event) => event.accountingRole === "cumulative_snapshot")
       .map((event) => event.estimatedCost)
       .filter((cost): cost is number => cost !== null);
     const estimatedCost =
@@ -218,7 +286,18 @@ export class CodexAdapter implements SessionAdapter {
         inputTokens: usage.input,
         outputTokens: usage.output,
         cachedInputTokens: usage.cached,
+        uncachedInputTokens: Math.max(0, usage.input - usage.cached),
         estimatedCost,
+        accountingMethod: usageEvents.some(
+          (event) => event.accountingRole === "cumulative_snapshot",
+        )
+          ? "cumulative_snapshot"
+          : usageEvents.some((event) => event.accountingRole === "incremental")
+            ? "incremental_events"
+            : "unavailable",
+        accountingStatus: usage.hasNegativeValues ? "invalid" : "verified",
+        accountingVersion: "agentledger-accounting-v1",
+        lastUsageEventAt: usageEvents.at(-1)?.eventTime ?? endedAt ?? null,
         sourceFile,
         sourceFileHash: "",
         importedAt: null,

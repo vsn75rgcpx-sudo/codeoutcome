@@ -27,6 +27,16 @@ function tokenCount(record: JsonRecord | undefined, ...keys: string[]): number {
   return Math.trunc(firstNumber(...valueFrom(record, keys)) ?? 0);
 }
 
+function hasNegativeTokenValue(
+  record: JsonRecord | undefined,
+  keys: string[],
+): boolean {
+  return keys.some((key) => {
+    const value = record?.[key];
+    return typeof value === "number" && Number.isFinite(value) && value < 0;
+  });
+}
+
 export class ClaudeCodeAdapter implements SessionAdapter {
   readonly provider = "claude-code" as const;
   readonly supportedFormats = [
@@ -117,9 +127,30 @@ export class ClaudeCodeAdapter implements SessionAdapter {
           sourceOffset: position.startOffset,
           eventTime: eventTime ?? null,
           eventType: "incremental",
+          accountingRole: "incremental",
+          isCanonical: false,
+          providerEventId: firstString(entry.uuid, entry.event_id) ?? null,
+          snapshotSequence: position.startOffset,
           inputTokens,
           outputTokens,
           cachedInputTokens,
+          reasoningOutputTokens: tokenCount(usage, "reasoning_output_tokens"),
+          reportedTotalTokens:
+            firstNumber(usage.total_tokens, usage.totalTokens) ?? null,
+          hasNegativeValues: hasNegativeTokenValue(usage, [
+            "input_tokens",
+            "inputTokens",
+            "output_tokens",
+            "outputTokens",
+            "cache_read_input_tokens",
+            "cached_input_tokens",
+            "cachedInputTokens",
+            "cache_creation_input_tokens",
+            "cache_write_input_tokens",
+            "reasoning_output_tokens",
+            "total_tokens",
+            "totalTokens",
+          ]),
           estimatedCost,
         });
       },
@@ -172,10 +203,18 @@ export class ClaudeCodeAdapter implements SessionAdapter {
         inputTokens,
         outputTokens,
         cachedInputTokens,
+        uncachedInputTokens: Math.max(0, inputTokens - cachedInputTokens),
         estimatedCost:
           costs.length === usageEvents.length && costs.length > 0
             ? costs.reduce((total, cost) => total + cost, 0)
             : null,
+        accountingMethod:
+          usageEvents.length > 0 ? "incremental_events" : "unavailable",
+        accountingStatus: usageEvents.some((event) => event.hasNegativeValues)
+          ? "invalid"
+          : "verified",
+        accountingVersion: "agentledger-accounting-v1",
+        lastUsageEventAt: usageEvents.at(-1)?.eventTime ?? endedAt ?? null,
         sourceFile,
         sourceFileHash: "",
         importedAt: null,

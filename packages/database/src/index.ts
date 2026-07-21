@@ -4,6 +4,9 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 import type {
+  AccountingMethod,
+  AccountingRole,
+  AccountingStatus,
   Provider,
   ProviderSelection,
   Session,
@@ -18,6 +21,7 @@ import {
 } from "./migrations.js";
 
 export { LATEST_MIGRATION_VERSION } from "./migrations.js";
+export { REPARSE_REQUIRED_CHECKPOINT } from "./migrations.js";
 
 export interface AgentLedgerPaths {
   dataDirectory: string;
@@ -108,6 +112,20 @@ export interface SessionQuery {
   limit?: number;
 }
 
+export interface SessionAccountingUpdate {
+  sessionId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  uncachedInputTokens: number;
+  estimatedCost: number | null;
+  accountingMethod: AccountingMethod;
+  accountingStatus: AccountingStatus;
+  accountingVersion: string;
+  lastUsageEventAt: string | null;
+  canonicalEventIds: readonly string[];
+}
+
 interface SessionRow {
   id: unknown;
   provider: unknown;
@@ -123,7 +141,12 @@ interface SessionRow {
   input_tokens: unknown;
   output_tokens: unknown;
   cached_input_tokens: unknown;
+  uncached_input_tokens: unknown;
   estimated_cost: unknown;
+  accounting_method: unknown;
+  accounting_status: unknown;
+  accounting_version: unknown;
+  last_usage_event_at: unknown;
   source_file: unknown;
   source_file_hash: unknown;
   imported_at: unknown;
@@ -134,9 +157,16 @@ interface UsageEventRow {
   session_id: unknown;
   event_time: unknown;
   event_type: unknown;
+  accounting_role: unknown;
+  is_canonical: unknown;
+  provider_event_id: unknown;
+  snapshot_sequence: unknown;
   input_tokens: unknown;
   output_tokens: unknown;
   cached_input_tokens: unknown;
+  reasoning_output_tokens: unknown;
+  reported_total_tokens: unknown;
+  has_negative_values: unknown;
   estimated_cost: unknown;
   source_file: unknown;
   source_offset: unknown;
@@ -221,6 +251,36 @@ function usageEventTypeFrom(value: unknown): UsageEventType {
   throw new Error(`Unsupported usage event type: ${String(value)}`);
 }
 
+function accountingMethodFrom(value: unknown): AccountingMethod {
+  if (
+    value === "cumulative_snapshot" ||
+    value === "incremental_events" ||
+    value === "ambiguous" ||
+    value === "unavailable"
+  ) {
+    return value;
+  }
+  return "unavailable";
+}
+
+function accountingStatusFrom(value: unknown): AccountingStatus {
+  if (value === "verified" || value === "warning" || value === "invalid") {
+    return value;
+  }
+  return "warning";
+}
+
+function accountingRoleFrom(value: unknown): AccountingRole {
+  if (
+    value === "cumulative_snapshot" ||
+    value === "incremental" ||
+    value === "informational"
+  ) {
+    return value;
+  }
+  return "informational";
+}
+
 function minTimestamp(
   left: string | null,
   right: string | null,
@@ -251,6 +311,35 @@ function importRunFromRow(row: ImportRunRow): ImportRun {
     skippedSessions: safeNumber(row.skipped_sessions),
     malformedFiles: safeNumber(row.malformed_files),
     status: importStatusFrom(row.status),
+  };
+}
+
+function sessionFromRow(row: SessionRow): Session {
+  return {
+    id: requiredString(row.id, "unknown-session"),
+    provider: providerFrom(row.provider),
+    providerSessionId: requiredString(row.provider_session_id, "unknown"),
+    model: requiredString(row.model, "unknown"),
+    startedAt: nullableString(row.started_at),
+    endedAt: nullableString(row.ended_at),
+    workingDirectory: nullableString(row.working_directory),
+    repositoryPath: nullableString(row.repository_path),
+    repositoryName: nullableString(row.repository_name),
+    remoteUrl: nullableString(row.remote_url),
+    branch: nullableString(row.branch),
+    inputTokens: safeNumber(row.input_tokens),
+    outputTokens: safeNumber(row.output_tokens),
+    cachedInputTokens: safeNumber(row.cached_input_tokens),
+    uncachedInputTokens: safeNumber(row.uncached_input_tokens),
+    estimatedCost:
+      row.estimated_cost === null ? null : safeNumber(row.estimated_cost),
+    accountingMethod: accountingMethodFrom(row.accounting_method),
+    accountingStatus: accountingStatusFrom(row.accounting_status),
+    accountingVersion: requiredString(row.accounting_version, "legacy-unknown"),
+    lastUsageEventAt: nullableString(row.last_usage_event_at),
+    sourceFile: requiredString(row.source_file, "unknown"),
+    sourceFileHash: requiredString(row.source_file_hash, ""),
+    importedAt: nullableString(row.imported_at),
   };
 }
 
@@ -644,9 +733,11 @@ export class SessionDatabase {
         INSERT INTO usage_events (
           id, session_id, event_time, event_type, input_tokens,
           output_tokens, cached_input_tokens, estimated_cost,
-          source_file, source_offset
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO NOTHING
+          source_file, source_offset, accounting_role, is_canonical,
+          provider_event_id, snapshot_sequence, reasoning_output_tokens,
+          reported_total_tokens, has_negative_values
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
       `);
       for (const event of input.usageEvents) {
         insertEvent.run(
@@ -660,6 +751,13 @@ export class SessionDatabase {
           event.estimatedCost,
           event.sourceFile,
           event.sourceOffset,
+          event.accountingRole,
+          event.isCanonical ? 1 : 0,
+          event.providerEventId,
+          event.snapshotSequence,
+          event.reasoningOutputTokens,
+          event.reportedTotalTokens,
+          event.hasNegativeValues ? 1 : 0,
         );
       }
 
@@ -790,9 +888,22 @@ export class SessionDatabase {
       sessionId: requiredString(row.session_id, sessionId),
       eventTime: nullableString(row.event_time),
       eventType: usageEventTypeFrom(row.event_type),
+      accountingRole: accountingRoleFrom(row.accounting_role),
+      isCanonical: safeNumber(row.is_canonical) === 1,
+      providerEventId: nullableString(row.provider_event_id),
+      snapshotSequence:
+        row.snapshot_sequence === null
+          ? null
+          : safeNumber(row.snapshot_sequence),
       inputTokens: safeNumber(row.input_tokens),
       outputTokens: safeNumber(row.output_tokens),
       cachedInputTokens: safeNumber(row.cached_input_tokens),
+      reasoningOutputTokens: safeNumber(row.reasoning_output_tokens),
+      reportedTotalTokens:
+        row.reported_total_tokens === null
+          ? null
+          : safeNumber(row.reported_total_tokens),
+      hasNegativeValues: safeNumber(row.has_negative_values) === 1,
       estimatedCost:
         row.estimated_cost === null ? null : safeNumber(row.estimated_cost),
       sourceFile: requiredString(row.source_file, ""),
@@ -826,6 +937,64 @@ export class SessionDatabase {
         usage.estimatedCost,
         sessionId,
       );
+  }
+
+  applyUsageReconciliation(updates: readonly SessionAccountingUpdate[]): void {
+    this.#assertWritable("applyUsageReconciliation");
+    const clearCanonical = this.#database.prepare(
+      "UPDATE usage_events SET is_canonical = 0 WHERE session_id = ?",
+    );
+    const markCanonical = this.#database.prepare(
+      "UPDATE usage_events SET is_canonical = 1 WHERE session_id = ? AND id = ?",
+    );
+    const updateSession = this.#database.prepare(`
+      UPDATE sessions SET
+        input_tokens = ?, output_tokens = ?, cached_input_tokens = ?,
+        uncached_input_tokens = ?, estimated_cost = ?,
+        accounting_method = ?, accounting_status = ?, accounting_version = ?,
+        last_usage_event_at = ?
+      WHERE id = ?
+    `);
+
+    this.#database.exec("BEGIN IMMEDIATE;");
+    try {
+      for (const update of updates) {
+        clearCanonical.run(update.sessionId);
+        for (const eventId of update.canonicalEventIds) {
+          markCanonical.run(update.sessionId, eventId);
+        }
+        updateSession.run(
+          update.inputTokens,
+          update.outputTokens,
+          update.cachedInputTokens,
+          update.uncachedInputTokens,
+          update.estimatedCost,
+          update.accountingMethod,
+          update.accountingStatus,
+          update.accountingVersion,
+          update.lastUsageEventAt,
+          update.sessionId,
+        );
+      }
+      this.#database.exec("COMMIT;");
+    } catch (error) {
+      this.#database.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+
+  getSession(sessionId: string): Session | null {
+    const row = this.#database
+      .prepare(
+        `
+        SELECT s.*, r.name AS repository_name, r.remote_url AS remote_url
+        FROM sessions s
+        LEFT JOIN repositories r ON r.id = s.repository_id
+        WHERE s.id = ?
+      `,
+      )
+      .get(sessionId) as SessionRow | undefined;
+    return row === undefined ? null : sessionFromRow(row);
   }
 
   listSessions(query: SessionQuery = {}): Session[] {
@@ -869,27 +1038,7 @@ export class SessionDatabase {
       )
       .all(...parameters) as unknown as SessionRow[];
 
-    return rows.map((row) => ({
-      id: requiredString(row.id, "unknown-session"),
-      provider: providerFrom(row.provider),
-      providerSessionId: requiredString(row.provider_session_id, "unknown"),
-      model: requiredString(row.model, "unknown"),
-      startedAt: nullableString(row.started_at),
-      endedAt: nullableString(row.ended_at),
-      workingDirectory: nullableString(row.working_directory),
-      repositoryPath: nullableString(row.repository_path),
-      repositoryName: nullableString(row.repository_name),
-      remoteUrl: nullableString(row.remote_url),
-      branch: nullableString(row.branch),
-      inputTokens: safeNumber(row.input_tokens),
-      outputTokens: safeNumber(row.output_tokens),
-      cachedInputTokens: safeNumber(row.cached_input_tokens),
-      estimatedCost:
-        row.estimated_cost === null ? null : safeNumber(row.estimated_cost),
-      sourceFile: requiredString(row.source_file, "unknown"),
-      sourceFileHash: requiredString(row.source_file_hash, ""),
-      importedAt: nullableString(row.imported_at),
-    }));
+    return rows.map(sessionFromRow);
   }
 
   usageEventCount(): number {

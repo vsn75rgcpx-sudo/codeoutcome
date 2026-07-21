@@ -7,6 +7,11 @@ import path from "node:path";
 export type Provider = "claude-code" | "codex";
 export type ProviderSelection = Provider | "all";
 export type UsageEventType = "incremental" | "cumulative";
+export type AccountingMethod =
+  "cumulative_snapshot" | "incremental_events" | "ambiguous" | "unavailable";
+export type AccountingStatus = "verified" | "warning" | "invalid";
+export type AccountingRole =
+  "cumulative_snapshot" | "incremental" | "informational";
 
 export interface Session {
   id: string;
@@ -23,7 +28,12 @@ export interface Session {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
+  uncachedInputTokens: number;
   estimatedCost: number | null;
+  accountingMethod: AccountingMethod;
+  accountingStatus: AccountingStatus;
+  accountingVersion: string;
+  lastUsageEventAt: string | null;
   sourceFile: string;
   sourceFileHash: string;
   importedAt: string | null;
@@ -36,9 +46,16 @@ export interface UsageEvent {
   sourceOffset: number;
   eventTime: string | null;
   eventType: UsageEventType;
+  accountingRole: AccountingRole;
+  isCanonical: boolean;
+  providerEventId: string | null;
+  snapshotSequence: number | null;
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
+  reasoningOutputTokens: number;
+  reportedTotalTokens: number | null;
+  hasNegativeValues: boolean;
   estimatedCost: number | null;
 }
 
@@ -388,7 +405,7 @@ export function stableUsageEventId(
   provider: Provider,
   sourceFile: string,
   sourceOffset: number,
-  eventType: UsageEventType,
+  discriminator: UsageEventType | AccountingRole,
 ): string {
   return createHash("sha256")
     .update(provider)
@@ -397,7 +414,7 @@ export function stableUsageEventId(
     .update("\0")
     .update(String(sourceOffset))
     .update("\0")
-    .update(eventType)
+    .update(discriminator)
     .digest("hex");
 }
 

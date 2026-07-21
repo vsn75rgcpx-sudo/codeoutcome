@@ -7,11 +7,15 @@ import { promisify } from "node:util";
 import { ClaudeCodeAdapter } from "@agentledger/adapter-claude-code";
 import { CodexAdapter } from "@agentledger/adapter-codex";
 import {
+  auditUsage,
   buildUsageReport,
+  reconcileUsage,
   runImport,
   type CostSummary,
   type UsagePeriod,
   type UsageReport,
+  type UsageAuditReport,
+  type UsageReconciliationReport,
 } from "@agentledger/core";
 import {
   getAgentLedgerPaths,
@@ -629,6 +633,212 @@ async function runSessionsCommand(
   return 0;
 }
 
+function shortSessionId(value: string): string {
+  return value.length <= 12 ? value : `${value.slice(0, 12)}…`;
+}
+
+function safeAuditReport(
+  report: UsageAuditReport,
+  userHome: string,
+): UsageAuditReport {
+  return {
+    ...report,
+    sessions: report.sessions.map((session) => ({
+      ...session,
+      sessionId: shortSessionId(session.sessionId),
+      providerSessionId: shortSessionId(session.providerSessionId),
+      sourceFiles: session.sourceFiles.map((sourceFile) =>
+        redacted(sourceFile, userHome),
+      ),
+    })),
+  };
+}
+
+async function runAuditUsageCommand(
+  arguments_: readonly string[],
+  context: Required<Pick<CliOptions, "io" | "userHome">> & {
+    databaseFile: string;
+  },
+): Promise<number> {
+  const parsed = parseArguments(
+    arguments_,
+    ["--json"],
+    ["--provider", "--session", "--top"],
+  );
+  const inspection = inspectDatabase(context.databaseFile);
+  if (!inspection.exists) {
+    context.io.stdout("No database found. Run `agentledger import` first.");
+    return 0;
+  }
+  const providerValue = parsed.values.get("--provider");
+  const provider =
+    providerValue === undefined
+      ? undefined
+      : (parseProvider(providerValue, false) as Provider);
+  const database = new SessionDatabase(context.databaseFile);
+  try {
+    const report = safeAuditReport(
+      auditUsage(database, {
+        provider,
+        session: parsed.values.get("--session"),
+        top: parseLimit(parsed.values.get("--top"), 20),
+      }),
+      context.userHome,
+    );
+    if (parsed.booleans.has("--json")) {
+      context.io.stdout(JSON.stringify(report, null, 2));
+    } else if (report.sessions.length === 0) {
+      context.io.stdout("No matching sessions found.");
+    } else {
+      context.io.stdout(
+        [
+          `Checked ${report.checkedSessions} session(s); warnings ${report.warningSessions}; ambiguous ${report.ambiguousSessions}; invalid ${report.invalidSessions}.`,
+          table(
+            [
+              "SESSION",
+              "PROVIDER",
+              "MODEL",
+              "SOURCE",
+              "SNAP",
+              "INCR",
+              "INFO",
+              "CANON",
+              "METHOD",
+              "INPUT",
+              "UNCACHED",
+              "CACHE",
+              "OUTPUT",
+              "TOTAL",
+              "MONO",
+              "DUP",
+              "I<C",
+              "NEG",
+              "MIX",
+              "WARNINGS",
+            ],
+            report.sessions.map((session) => [
+              session.sessionId,
+              session.provider,
+              truncate(session.model, 18),
+              truncate(session.sourceFiles[0] ?? "unknown", 34),
+              String(session.totalSnapshotCount),
+              String(session.incrementalEventCount),
+              String(session.informationalEventCount),
+              String(session.canonicalEventCount),
+              session.accountingMethod,
+              session.inputTokens.toLocaleString("en-US"),
+              session.uncachedInputTokens.toLocaleString("en-US"),
+              session.cachedInputTokens.toLocaleString("en-US"),
+              session.outputTokens.toLocaleString("en-US"),
+              session.totalTokens.toLocaleString("en-US"),
+              session.hasMonotonicityAnomaly ? "yes" : "no",
+              session.hasDuplicateEvent ? "yes" : "no",
+              session.hasInputLessThanCache ? "yes" : "no",
+              session.hasNegativeValues ? "yes" : "no",
+              session.hasMixedAccounting ? "yes" : "no",
+              session.warnings.join(",") || "—",
+            ]),
+          ),
+        ].join("\n\n"),
+      );
+    }
+    return report.invalidSessions > 0 ? 1 : 0;
+  } finally {
+    database.close();
+  }
+}
+
+function safeReconciliationReport(
+  report: UsageReconciliationReport,
+): UsageReconciliationReport {
+  return {
+    ...report,
+    sessions: report.sessions.map((session) => ({
+      ...session,
+      sessionId: shortSessionId(session.sessionId),
+    })),
+  };
+}
+
+async function runReconcileUsageCommand(
+  arguments_: readonly string[],
+  context: Required<Pick<CliOptions, "io">> & { databaseFile: string },
+): Promise<number> {
+  const parsed = parseArguments(
+    arguments_,
+    ["--dry-run", "--json"],
+    ["--provider"],
+  );
+  const inspection = inspectDatabase(context.databaseFile);
+  if (!inspection.exists) {
+    context.io.stdout("No database found. Run `agentledger import` first.");
+    return 0;
+  }
+  const providerValue = parsed.values.get("--provider");
+  const provider =
+    providerValue === undefined
+      ? undefined
+      : (parseProvider(providerValue, false) as Provider);
+  const dryRun = parsed.booleans.has("--dry-run");
+  const database = new SessionDatabase(context.databaseFile);
+  try {
+    const report = safeReconciliationReport(
+      reconcileUsage(database, { provider, dryRun }),
+    );
+    if (parsed.booleans.has("--json")) {
+      context.io.stdout(JSON.stringify(report, null, 2));
+    } else {
+      context.io.stdout(
+        [
+          table(
+            [
+              "MODE",
+              "CHECKED",
+              "MODIFIED",
+              "WARN",
+              "AMBIGUOUS",
+              "BEFORE INPUT",
+              "AFTER INPUT",
+              "BEFORE OUTPUT",
+              "AFTER OUTPUT",
+              "BEFORE CACHE",
+              "AFTER CACHE",
+            ],
+            [
+              [
+                dryRun ? "dry-run" : "applied",
+                String(report.checkedSessions),
+                String(report.modifiedSessions),
+                String(report.warningSessions),
+                String(report.ambiguousSessions),
+                report.before.inputTokens.toLocaleString("en-US"),
+                report.after.inputTokens.toLocaleString("en-US"),
+                report.before.outputTokens.toLocaleString("en-US"),
+                report.after.outputTokens.toLocaleString("en-US"),
+                report.before.cachedInputTokens.toLocaleString("en-US"),
+                report.after.cachedInputTokens.toLocaleString("en-US"),
+              ],
+            ],
+          ),
+          table(
+            ["SESSION", "CHANGED", "METHOD", "STATUS", "WARNINGS"],
+            report.sessions.map((session) => [
+              session.sessionId,
+              session.modified ? "yes" : "no",
+              session.after.accountingMethod,
+              session.after.accountingStatus,
+              session.warnings.join(",") || "—",
+            ]),
+          ),
+        ].join("\n\n"),
+      );
+    }
+    return 0;
+  } finally {
+    database.close();
+  }
+}
+
 function selectPeriod(parsed: ParsedArguments): UsagePeriod {
   const selected = ["--daily", "--weekly", "--monthly"].filter((flag) =>
     parsed.booleans.has(flag),
@@ -654,13 +864,23 @@ function usageSection(
   buckets: UsageReport["byProvider"],
 ): string {
   return `${title}\n${table(
-    ["GROUP", "SESSIONS", "INPUT", "OUTPUT", "CACHE", "TOTAL", "COST"],
+    [
+      "GROUP",
+      "SESSIONS",
+      "INPUT",
+      "UNCACHED INPUT",
+      "CACHED INPUT*",
+      "OUTPUT",
+      "TOTAL**",
+      "COST",
+    ],
     buckets.map((bucket) => [
       bucket.key,
       bucket.sessions.toLocaleString("en-US"),
       bucket.inputTokens.toLocaleString("en-US"),
-      bucket.outputTokens.toLocaleString("en-US"),
+      bucket.uncachedInputTokens.toLocaleString("en-US"),
       bucket.cachedInputTokens.toLocaleString("en-US"),
+      bucket.outputTokens.toLocaleString("en-US"),
       bucket.totalTokens.toLocaleString("en-US"),
       formatCostSummary(bucket.cost),
     ]),
@@ -704,6 +924,8 @@ async function runUsageCommand(
         usageSection("BY PROVIDER", report.byProvider),
         usageSection("BY MODEL", report.byModel),
         usageSection(`BY ${report.period.toUpperCase()} PERIOD`, report.byDate),
+        "* Cached Input is normally a subset of Input; it is not added again.",
+        "** Total = Input + Output.",
         `Pricing: ${report.pricing.version}; updated ${report.pricing.updatedAt}; ${report.pricing.source}`,
       ].join("\n\n"),
     );
@@ -717,6 +939,8 @@ function help(): string {
 Usage:
   agentledger doctor [--json]
   agentledger import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
+  agentledger audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
+  agentledger reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
   agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
   agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
 
@@ -753,6 +977,17 @@ export async function runCli(
         io,
         userHome,
         now,
+      });
+    case "audit-usage":
+      return runAuditUsageCommand(commandArguments, {
+        databaseFile,
+        io,
+        userHome,
+      });
+    case "reconcile-usage":
+      return runReconcileUsageCommand(commandArguments, {
+        databaseFile,
+        io,
       });
     case "sessions":
       return runSessionsCommand(commandArguments, {

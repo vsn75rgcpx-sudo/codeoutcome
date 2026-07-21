@@ -1,6 +1,21 @@
 export { collectSessions } from "./collector.js";
 export { runImport } from "./importer.js";
 export {
+  ACCOUNTING_VERSION,
+  analyzeUsageEvents,
+  type UsageAccountingAnalysis,
+} from "./accounting.js";
+export {
+  auditUsage,
+  reconcileUsage,
+  type ReconciliationSessionDiff,
+  type UsageAuditOptions,
+  type UsageAuditReport,
+  type UsageAuditSession,
+  type UsageReconciliationReport,
+  type UsageTotalsSnapshot,
+} from "./reconciliation.js";
+export {
   DEFAULT_PRICING_CATALOG,
   estimateUsageCost,
   type ModelPrice,

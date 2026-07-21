@@ -1,15 +1,13 @@
 import type { Provider, Session, UsageEvent } from "@agentledger/shared";
 
-import {
-  DEFAULT_PRICING_CATALOG,
-  estimateUsageCost,
-  type PricingCatalog,
-} from "./pricing.js";
+import { analyzeUsageEvents } from "./accounting.js";
+import { DEFAULT_PRICING_CATALOG, type PricingCatalog } from "./pricing.js";
 
 export interface AccountedUsage {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
+  uncachedInputTokens: number;
   estimatedCost: number | null;
   warnings: string[];
 }
@@ -29,6 +27,7 @@ export interface UsageBucket {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
+  uncachedInputTokens: number;
   totalTokens: number;
   cost: CostSummary;
 }
@@ -46,59 +45,20 @@ export interface UsageReport {
 }
 
 export function accountUsageEvents(
+  provider: Provider,
   events: readonly UsageEvent[],
   model: string,
   catalog: PricingCatalog = DEFAULT_PRICING_CATALOG,
 ): AccountedUsage {
-  const cumulative = events.filter((event) => event.eventType === "cumulative");
-  const selected = cumulative.length > 0 ? cumulative : events;
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cachedInputTokens = 0;
-
-  if (cumulative.length > 0) {
-    for (const event of selected) {
-      inputTokens = Math.max(inputTokens, event.inputTokens);
-      outputTokens = Math.max(outputTokens, event.outputTokens);
-      cachedInputTokens = Math.max(cachedInputTokens, event.cachedInputTokens);
-    }
-  } else {
-    for (const event of selected) {
-      inputTokens += event.inputTokens;
-      outputTokens += event.outputTokens;
-      cachedInputTokens += event.cachedInputTokens;
-    }
-  }
-
-  const warnings: string[] = [];
-  if (cachedInputTokens > inputTokens) {
-    cachedInputTokens = inputTokens;
-    warnings.push("cached input exceeded total input and was clamped");
-  }
-
-  const eventCosts = selected.map((event) => event.estimatedCost);
-  let estimatedCost: number | null = null;
-  if (eventCosts.length > 0 && eventCosts.every((cost) => cost !== null)) {
-    const knownCosts = eventCosts.filter(
-      (cost): cost is number => cost !== null,
-    );
-    estimatedCost =
-      cumulative.length > 0
-        ? Math.max(...knownCosts)
-        : knownCosts.reduce((total, cost) => total + cost, 0);
-  }
-  estimatedCost ??= estimateUsageCost(
-    model,
-    { inputTokens, outputTokens, cachedInputTokens },
-    catalog,
-  );
+  const analysis = analyzeUsageEvents(provider, model, events, catalog);
 
   return {
-    inputTokens,
-    outputTokens,
-    cachedInputTokens,
-    estimatedCost,
-    warnings,
+    inputTokens: analysis.inputTokens,
+    outputTokens: analysis.outputTokens,
+    cachedInputTokens: analysis.cachedInputTokens,
+    uncachedInputTokens: analysis.uncachedInputTokens,
+    estimatedCost: analysis.estimatedCost,
+    warnings: analysis.warnings,
   };
 }
 
@@ -108,6 +68,7 @@ interface MutableBucket {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
+  uncachedInputTokens: number;
   knownCost: number;
   pricedSessions: number;
   unpricedSessions: number;
@@ -120,6 +81,7 @@ function createBucket(key: string): MutableBucket {
     inputTokens: 0,
     outputTokens: 0,
     cachedInputTokens: 0,
+    uncachedInputTokens: 0,
     knownCost: 0,
     pricedSessions: 0,
     unpricedSessions: 0,
@@ -131,6 +93,7 @@ function addSession(bucket: MutableBucket, session: Session): void {
   bucket.inputTokens += session.inputTokens;
   bucket.outputTokens += session.outputTokens;
   bucket.cachedInputTokens += session.cachedInputTokens;
+  bucket.uncachedInputTokens += session.uncachedInputTokens;
   if (session.estimatedCost === null) {
     bucket.unpricedSessions += 1;
   } else {
@@ -152,6 +115,7 @@ function finishBucket(bucket: MutableBucket): UsageBucket {
     inputTokens: bucket.inputTokens,
     outputTokens: bucket.outputTokens,
     cachedInputTokens: bucket.cachedInputTokens,
+    uncachedInputTokens: bucket.uncachedInputTokens,
     totalTokens: bucket.inputTokens + bucket.outputTokens,
     cost: {
       amount: bucket.pricedSessions === 0 ? null : bucket.knownCost,

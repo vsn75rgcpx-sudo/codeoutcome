@@ -65,7 +65,12 @@ function sessionFixture(
     inputTokens: 0,
     outputTokens: 0,
     cachedInputTokens: 0,
+    uncachedInputTokens: 0,
     estimatedCost: null,
+    accountingMethod: "unavailable",
+    accountingStatus: "warning",
+    accountingVersion: "test",
+    lastUsageEventAt: null,
     sourceFile,
     sourceFileHash: "fixture-hash",
     importedAt: "2026-03-01T00:00:00.000Z",
@@ -81,9 +86,17 @@ function sourceImport(
     sessionId: session.id,
     eventTime: session.startedAt,
     eventType: session.provider === "codex" ? "cumulative" : "incremental",
+    accountingRole:
+      session.provider === "codex" ? "cumulative_snapshot" : "incremental",
+    isCanonical: false,
+    providerEventId: null,
+    snapshotSequence: 0,
     inputTokens: 10,
     outputTokens: 2,
     cachedInputTokens: 3,
+    reasoningOutputTokens: 1,
+    reportedTotalTokens: 12,
+    hasNegativeValues: false,
     estimatedCost: null,
     sourceFile: session.sourceFile,
     sourceOffset: 0,
@@ -130,6 +143,40 @@ describe("SessionDatabase migrations and queries", () => {
       currentMigrationVersion: LATEST_MIGRATION_VERSION,
       pendingMigrations: 0,
     });
+
+    const schema = new DatabaseSync(databaseFile, { readOnly: true });
+    const sessionColumns = schema
+      .prepare("PRAGMA table_info(sessions)")
+      .all()
+      .map((row) => (row as { name?: unknown }).name);
+    const eventColumns = schema
+      .prepare("PRAGMA table_info(usage_events)")
+      .all()
+      .map((row) => (row as { name?: unknown }).name);
+    expect(sessionColumns).toEqual(
+      expect.arrayContaining([
+        "accounting_method",
+        "accounting_status",
+        "accounting_version",
+        "uncached_input_tokens",
+        "last_usage_event_at",
+      ]),
+    );
+    expect(eventColumns).toEqual(
+      expect.arrayContaining([
+        "accounting_role",
+        "is_canonical",
+        "provider_event_id",
+        "snapshot_sequence",
+        "reasoning_output_tokens",
+        "reported_total_tokens",
+      ]),
+    );
+    schema.close();
+
+    const repeatedMigration = new SessionDatabase(databaseFile);
+    expect(repeatedMigration.migrationVersion()).toBe(LATEST_MIGRATION_VERSION);
+    repeatedMigration.close();
 
     const firstReader = new SessionDatabase(databaseFile, { readOnly: true });
     const secondReader = new SessionDatabase(databaseFile, { readOnly: true });

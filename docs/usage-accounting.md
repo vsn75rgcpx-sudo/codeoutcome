@@ -16,8 +16,11 @@ totalTokens = inputTokens + outputTokens
 ```
 
 Cached input is never added to `totalTokens` again. If a malformed record reports
-more cached input than total input, accounting clamps cached input to total input
-and records a non-sensitive warning.
+more cached input than total input, accounting preserves the reported values,
+sets Uncached Input to zero, and records a non-sensitive warning.
+
+`reasoning_output_tokens` is treated as a subset of Output. It is available to
+the accounting audit but is never added to Total a second time.
 
 All parsed timestamps are converted to ISO 8601 UTC. Session start is the
 earliest valid timestamp and end is the latest. Displayed duration is clamped at
@@ -57,17 +60,37 @@ Supported primary shape:
 - conservative fallbacks to `payload.usage` or top-level `usage` for older
   records.
 
-`total_token_usage` is cumulative. AgentLedger takes the maximum observed value
-for input, output, and cached input rather than summing successive snapshots.
-When a file has only `last_token_usage`/older usage records, those records are
-treated as incremental and summed. If cumulative events exist for a session,
-they take precedence over incremental events so both representations are not
-combined.
+`total_token_usage` is a cumulative session snapshot. AgentLedger orders valid
+snapshots by event time and selects the last one as canonical. Historical
+snapshots remain in `usage_events` for audit and are never summed or combined by
+taking independent per-field maxima.
+
+Current Codex token-count records may contain both `total_token_usage` and
+`last_token_usage`. In that shape, the last payload is stored as informational:
+it commonly represents the most recent model call and may be repeated while the
+cumulative snapshot is unchanged. It is therefore never added to the paired
+cumulative total. Only when a session has no cumulative snapshot are standalone
+last/legacy usage records classified as increments and deduplicated before
+summing.
+
+If standalone increments coexist with cumulative snapshots, or a cumulative
+counter decreases, AgentLedger selects the final provider snapshot without
+adding the uncertain range and marks the session `ambiguous`. The audit exposes
+the exact reason instead of silently choosing a hybrid total.
 
 Codex `input_tokens` is treated as already containing the cached subset;
 `cached_input_tokens` is not added again. `cache_write_input_tokens`, when
 present, is not separately added because current cumulative totals already
 represent total input.
+
+Each session records an accounting method (`cumulative_snapshot`,
+`incremental_events`, `ambiguous`, or `unavailable`), status (`verified`,
+`warning`, or `invalid`), accounting version, Uncached Input, and last canonical
+usage time. Each event records its accounting role, canonical marker, optional
+Provider event ID, deterministic source sequence, reasoning count, and reported
+total. `audit-usage` explains the selection; `reconcile-usage` rebuilds totals
+and canonical markers transactionally from events, never from the previous
+session aggregate.
 
 Known risk: an unknown historical format could label a cumulative field as an
 increment or vice versa. Such a format requires a new synthetic compatibility
@@ -110,8 +133,9 @@ The current `local-unpriced-v1` catalog intentionally enables no rates. Unknown
 models and unverified rates produce `unavailable`, not zero.
 
 If a future versioned local catalog supplies a matching model, AgentLedger will
-calculate uncached input, cached input, and output separately and label the
-result `estimated`. Mixed priced/unpriced summaries are labeled `partial`.
+calculate Uncached Input, Cached Input, and Output separately. Reasoning is not
+priced again because it is part of Output. The result is labeled `estimated`.
+Mixed priced/unpriced summaries are labeled `partial`.
 Neither estimated nor source-provided cost should be treated as a billing
 statement.
 
@@ -122,8 +146,8 @@ statement.
 - A rewritten source can remove time metadata; token totals are recomputed, but
   session time bounds merged from other fragments may remain conservative.
 - Missing-ID sessions are path-stable, not content-stable, when files move.
-- Cross-file duplicate detection is exact for cumulative Codex snapshots but
-  cannot reliably identify copied incremental Claude events.
+- Cross-file duplicate detection uses a Provider event ID when one exists.
+  Formats without that ID cannot reliably identify copied incremental events.
 - Source logs may omit cached-token or cost fields. AgentLedger does not infer
   values that are absent.
 - The database stores canonical local paths internally even though CLI output

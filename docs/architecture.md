@@ -17,12 +17,13 @@ Codex JSONL --> Codex adapter ---+             |                      |
 - `packages/adapters/claude-code`: Claude Code discovery and parsing only.
 - `packages/adapters/codex`: Codex discovery and parsing only.
 - `packages/core`: import orchestration, per-file error isolation, incremental
-  checkpoint decisions, token accounting, time buckets, and local pricing.
+  checkpoint decisions, canonical token audit/reconciliation, time buckets,
+  and local pricing.
 - `packages/database`: versioned SQLite migrations, transactions, checkpoints,
   repositories, import runs, and filtered queries.
 - `packages/git-tracker`: read-only Git enrichment and remote URL sanitization.
 - `apps/cli`: argument validation and human/JSON presentation for `doctor`,
-  `import`, `sessions`, and `usage`.
+  `import`, `audit-usage`, `reconcile-usage`, `sessions`, and `usage`.
 
 `doctor` uses read-only inspection and never constructs `SessionDatabase`, so it
 cannot create a file or apply a migration. A non-dry-run import opens the
@@ -42,3 +43,16 @@ Usage-event IDs and unique constraints prevent the same source offset from
 being applied twice. Session IDs are derived from provider plus provider session
 ID. When the provider ID is missing, the adapter derives a stable fallback from
 provider plus canonical source path.
+
+## Accounting reconciliation
+
+Provider adapters classify usage payloads as cumulative snapshots, standalone
+increments, or informational records. Core selects canonical events and derives
+all session totals without consulting the previous aggregate. Database applies
+canonical markers and session totals in one transaction, so a failure rolls the
+whole reconciliation back.
+
+Historical cumulative snapshots and paired informational payloads stay in
+`usage_events` for audit. Only the final reliable snapshot, or deduplicated
+increments when snapshots are absent, is marked canonical. Decreasing snapshots
+or mixed ranges become `ambiguous` and carry explicit reason codes.
