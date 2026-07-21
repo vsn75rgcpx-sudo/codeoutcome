@@ -1,14 +1,20 @@
 # AgentLedger
 
-AgentLedger is a local-first CLI that imports Claude Code and OpenAI Codex
+> **Dashboard screenshot:** intentionally not included in Phase 4A. The local
+> Dashboard is implemented and tested, but no fabricated placeholder image is
+> committed. A real capture can be added during Phase 4B packaging.
+
+AgentLedger is a local-first tool that imports Claude Code and OpenAI Codex
 session metadata into SQLite, reports token usage, and records local Git changes
 observed during an AI coding session. It also records explicitly wrapped local
-test runs and imported aggregate test reports. It reads JSONL logs incrementally,
-keeps Provider and test parsers independent, and stores only accounting, Git,
-and aggregate test metadata.
+test runs and imported aggregate test reports. A read-only React Dashboard shows
+the same local metadata through a loopback-only API. AgentLedger reads JSONL logs
+incrementally, keeps Provider and test parsers independent, and stores only
+accounting, Git, and aggregate test metadata.
 
-There is no web app, desktop app, VS Code plugin, cloud sync, telemetry, or
-network pricing lookup in the current phase.
+The Dashboard is a local web UI, not a desktop app or remote service. There is no
+VS Code plugin, cloud sync, telemetry, account system, or network pricing lookup
+in the current phase.
 
 AgentLedger uses this wording:
 
@@ -37,6 +43,7 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm dashboard:test
 ```
 
 Run the CLI from this workspace:
@@ -55,6 +62,9 @@ pnpm cli test run --stage baseline -- pnpm test
 pnpm cli test import --file ./report.xml --format junit
 pnpm cli test compare --tracking-run <tracking-run-id>
 pnpm cli track stop
+pnpm dashboard:build
+pnpm cli dashboard
+# or: pnpm cli dashboard --no-open --port 0
 ```
 
 After `pnpm build`, the executable is `apps/cli/dist/index.js`. A linked or
@@ -92,6 +102,7 @@ agentledger test unlink <test-run-id>
 agentledger test recover <test-run-id>|--list
 agentledger test abandon <test-run-id>
 agentledger data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]
+agentledger dashboard [--no-open] [--port 4567] [--host 127.0.0.1] [--json]
 ```
 
 `doctor` is diagnostic only: it does not create the database, run migrations,
@@ -133,6 +144,28 @@ AGENTLEDGER_DATA_DIR=/path/to/local/data pnpm cli import
 Durations such as `7d`, `24h`, and `4w` are supported by `--since`. Date
 filtering and report buckets use UTC.
 
+## Local Dashboard
+
+Build and start the Dashboard with `pnpm dashboard:build` followed by
+`pnpm cli dashboard`. It binds to `127.0.0.1` on a random available port and
+opens the system browser by default. `--no-open` leaves the browser closed;
+`--port` selects a fixed port. Non-loopback hosts are rejected.
+
+The server opens SQLite in read-only mode with `query_only=ON`, never runs a
+migration, and exposes only whitelisted aggregate and metadata queries. Each
+start creates an in-memory access token that is injected into the initial page
+and sent in a dedicated API header. The token is not put in the URL, database,
+or CLI output. Host and same-origin Origin checks, a restrictive CSP, no CORS,
+bounded pagination, and runtime query validation maintain the localhost security
+boundary.
+
+The UI provides Overview, Sessions, Tracking Runs, Test Runs, Diagnostics, and
+metadata-only detail views. It does not expose Prompt or response bodies, source
+code, complete Git diffs, raw test output, stack traces, credentials, arbitrary
+files, or SQL. In `strict` privacy mode, original paths and full commands remain
+redacted. See [Local Dashboard](docs/dashboard.md) for startup, security, empty
+states, refresh behavior, and troubleshooting.
+
 ## Privacy principles
 
 - Source logs are opened read-only. AgentLedger never edits, moves, truncates,
@@ -156,8 +189,9 @@ filtering and report buckets use UTC.
 - In `strict` mode, test `command_display` contains only the executable basename
   and report paths are replaced by irreversible fingerprints. Aggregate counts,
   duration, exit status, framework, and parser status remain available.
-- There are no network requests or remote telemetry. Pricing uses only the
-  bundled versioned local catalog.
+- There are no outbound network requests or remote telemetry. The Dashboard's
+  HTTP traffic stays on loopback. Pricing uses only the bundled versioned local
+  catalog.
 - All committed fixtures are synthetic and redacted. Never copy real user logs
   into this repository.
 - A malformed file is isolated to that provider and file; errors never include
@@ -210,6 +244,7 @@ incremental-import behavior, and known risks. See
 [Git tracking](docs/git-tracking.md) for snapshot, confidence, privacy, and
 recovery semantics. See [Test tracking](docs/test-tracking.md) for wrapper,
 report, comparison, privacy, recovery, and deletion semantics. See
+[Local Dashboard](docs/dashboard.md) for the read-only UI and API boundary. See
 [Architecture](docs/architecture.md) for module boundaries.
 
 ## Test tracking limits

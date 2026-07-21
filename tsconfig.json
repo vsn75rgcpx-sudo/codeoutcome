@@ -5,6 +5,7 @@
     { "path": "./packages/database" },
     { "path": "./packages/git-tracker" },
     { "path": "./packages/core" },
+    { "path": "./packages/dashboard-server" },
     { "path": "./packages/adapters/claude-code" },
     { "path": "./packages/adapters/codex" },
     { "path": "./apps/cli" }

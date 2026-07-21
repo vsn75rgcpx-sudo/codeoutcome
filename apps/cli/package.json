@@ -14,6 +14,7 @@
     "@agentledger/adapter-codex": "workspace:*",
     "@agentledger/core": "workspace:*",
     "@agentledger/database": "workspace:*",
+    "@agentledger/dashboard-server": "workspace:*",
     "@agentledger/git-tracker": "workspace:*",
     "@agentledger/shared": "workspace:*"
   }

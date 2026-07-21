@@ -1,5 +1,5 @@
 {
-  "name": "@agentledger/shared",
+  "name": "@agentledger/dashboard-server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,13 +9,16 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./dashboard": {
-      "types": "./dist/dashboard.d.ts",
-      "import": "./dist/dashboard.js"
     }
   },
   "scripts": {
     "build": "tsc -b"
+  },
+  "dependencies": {
+    "@agentledger/core": "workspace:*",
+    "@agentledger/database": "workspace:*",
+    "@agentledger/shared": "workspace:*",
+    "@hono/node-server": "2.0.10",
+    "hono": "4.12.31"
   }
 }

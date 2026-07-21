@@ -35,6 +35,7 @@ import {
 
 import { PHASE3_HELP, runPhase3Cli } from "./tracking-cli.js";
 import { runTestCli, TEST_HELP } from "./test-cli.js";
+import { DASHBOARD_HELP, runDashboardCli } from "./dashboard-cli.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -56,6 +57,9 @@ export interface CliOptions {
   processRunner?: ProviderProcessRunner;
   testProcessRunner?: TestProcessRunner;
   codexExecutable?: string;
+  dashboardStaticRoot?: string;
+  dashboardStarter?: Parameters<typeof runDashboardCli>[1]["startServer"];
+  dashboardBrowserOpener?: Parameters<typeof runDashboardCli>[1]["openBrowser"];
 }
 
 type DoctorStatus = "PASS" | "WARN" | "FAIL";
@@ -996,6 +1000,7 @@ Usage:
   agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
 ${PHASE3_HELP}
 ${TEST_HELP}
+${DASHBOARD_HELP}
 
 AgentLedger reads source logs without modifying them and never stores prompt,
 response, source, or raw test output bodies.`;
@@ -1014,6 +1019,19 @@ export async function runCli(
   const databaseFile =
     options.databaseFile ??
     getAgentLedgerPaths(environment, userHome, platform).databaseFile;
+  const dashboardResult = await runDashboardCli(arguments_, {
+    io,
+    databaseFile,
+    dataDirectory: path.dirname(databaseFile),
+    userHome,
+    platform,
+    environment,
+    now,
+    staticRoot: options.dashboardStaticRoot,
+    startServer: options.dashboardStarter,
+    openBrowser: options.dashboardBrowserOpener,
+  });
+  if (dashboardResult !== null) return dashboardResult;
   const testResult = await runTestCli(arguments_, {
     io,
     databaseFile,

@@ -9,13 +9,16 @@
     "agentledger": "./apps/cli/dist/index.js"
   },
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && pnpm dashboard:build",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -p tsconfig.check.json --noEmit --pretty false",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "dashboard:dev": "pnpm dashboard:build && pnpm cli dashboard --no-open",
+    "dashboard:build": "pnpm --filter @agentledger/dashboard build",
+    "dashboard:test": "vitest run packages/dashboard-server apps/dashboard apps/cli/src/dashboard-cli.test.ts",
     "cli": "tsx apps/cli/src/index.ts"
   },
   "engines": {

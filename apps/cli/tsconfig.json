@@ -12,6 +12,7 @@
     { "path": "../../packages/adapters/claude-code" },
     { "path": "../../packages/adapters/codex" },
     { "path": "../../packages/database" },
+    { "path": "../../packages/dashboard-server" },
     { "path": "../../packages/git-tracker" }
   ],
   "include": ["src/**/*.ts"],

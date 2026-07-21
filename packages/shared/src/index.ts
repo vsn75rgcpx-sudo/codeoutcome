@@ -676,3 +676,5 @@ export function redactHomePath(
   }
   return candidate;
 }
+
+export * from "./dashboard.js";
