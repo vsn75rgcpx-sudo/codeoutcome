@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
-import { userInfo } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -62,13 +62,13 @@ const { stdout: manifestText } = await execFileAsync("tar", [
   "package/package.json",
 ]);
 const combinedText = `${cli}\n${manifestText}\n${await readFile("README.md", "utf8")}`;
+const normalizedCombinedText = combinedText.replaceAll("\\", "/");
+const normalizedHome = homedir().replaceAll("\\", "/");
 if (
   /\/Users\/|BEGIN (?:RSA |OPENSSH )?PRIVATE KEY/.test(combinedText) ||
-  combinedText.includes(userInfo().username)
+  (normalizedHome.length > 1 && normalizedCombinedText.includes(normalizedHome))
 ) {
-  throw new Error(
-    "Package contains a local absolute path, username, or key marker",
-  );
+  throw new Error("Package contains a local home path or key marker");
 }
 const obsoleteUserVisibleBrandMarkers = [
   "AgentLedger —",

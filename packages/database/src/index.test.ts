@@ -264,6 +264,24 @@ describe("SessionDatabase migrations and queries", () => {
     backup.close();
   });
 
+  it("creates a consistent backup on Node versions without the backup API", async () => {
+    const { database, databaseFile, directory } = await temporaryDatabase();
+    database.close();
+    const backupFile = path.join(
+      directory,
+      "backups",
+      "portable-fixture.sqlite",
+    );
+    await backupDatabase(databaseFile, backupFile, {
+      forcePortableBackup: true,
+    });
+    await expect(access(backupFile)).resolves.toBeUndefined();
+    const backup = new SessionDatabase(backupFile, { readOnly: true });
+    expect(backup.migrationVersion()).toBe(LATEST_MIGRATION_VERSION);
+    expect(backup.quickCheck()).toBe("ok");
+    backup.close();
+  });
+
   it("filters sessions by provider, date range, and repository", async () => {
     const { database, directory } = await temporaryDatabase();
     const repositoryPath = path.join(directory, "project");

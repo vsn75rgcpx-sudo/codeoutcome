@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { accessSync, constants, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { backup as sqliteBackup, DatabaseSync } from "node:sqlite";
+import * as sqlite from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 
 import type {
   AccountingMethod,
@@ -1104,13 +1105,26 @@ export function inspectDatabase(databaseFile: string): DatabaseInspection {
 export async function backupDatabase(
   databaseFile: string,
   backupFile: string,
+  options: { forcePortableBackup?: boolean } = {},
 ): Promise<void> {
   if (!existsSync(databaseFile))
     throw new Error("Database file does not exist");
   mkdirSync(path.dirname(backupFile), { recursive: true, mode: 0o700 });
   const database = new DatabaseSync(databaseFile, { readOnly: true });
   try {
-    await sqliteBackup(database, backupFile);
+    const runtimeBackup: unknown = Reflect.get(sqlite, "backup");
+    if (!options.forcePortableBackup && typeof runtimeBackup === "function") {
+      await (
+        runtimeBackup as (
+          source: DatabaseSync,
+          destination: string,
+        ) => Promise<void>
+      )(database, backupFile);
+    } else {
+      // Node 22 does not expose node:sqlite's backup() API. VACUUM INTO creates
+      // a transactionally consistent standalone copy without copying WAL files.
+      database.prepare("VACUUM INTO ?").run(backupFile);
+    }
   } finally {
     database.close();
   }
