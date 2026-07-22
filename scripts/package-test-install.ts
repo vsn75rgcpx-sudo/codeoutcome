@@ -69,8 +69,31 @@ try {
   const binary = path.join(directory, "node_modules/.bin/codeoutcome");
   const help = await run(binary, ["--help"]);
   const version = await run(binary, ["--version"]);
-  const doctor = await run(binary, ["doctor"], true);
+  const doctor = await run(binary, ["doctor", "--provider", "codex", "--json"]);
+  const doctorReport = JSON.parse(doctor.stdout) as {
+    summary?: { fail?: number };
+  };
+  const formats = await run(binary, [
+    "formats",
+    "--provider",
+    "codex",
+    "--json",
+  ]);
+  const formatReport = JSON.parse(formats.stdout) as {
+    formats?: Array<{ validation?: string }>;
+  };
+  const feedback = await run(binary, ["feedback", "--json"]);
+  const feedbackReport = JSON.parse(feedback.stdout) as {
+    sent?: boolean;
+    automaticCollection?: boolean;
+  };
   await run(binary, ["import", "--provider", "all"]);
+  const testRun = await run(binary, [
+    "test",
+    process.execPath,
+    "-e",
+    "process.exit(0)",
+  ]);
 
   const child = spawn(
     binary,
@@ -155,7 +178,12 @@ try {
         installedOutsideMonorepo: true,
         version: version.stdout.trim(),
         help: help.stdout.includes("codeoutcome doctor"),
-        doctorExecuted: doctor.code === 0 || doctor.code === 1,
+        doctorFailCount: doctorReport.summary?.fail ?? null,
+        codexFormatValidation:
+          formatReport.formats?.[0]?.validation ?? "missing",
+        feedbackSent: feedbackReport.sent ?? null,
+        feedbackAutomaticCollection: feedbackReport.automaticCollection ?? null,
+        simplifiedTestCommand: testRun.stdout.includes("Status/outcome"),
         dashboardHomepage: homeResponse.status,
         dashboardHealth: health.status,
         stoppedCleanly: true,

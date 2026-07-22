@@ -10,7 +10,8 @@ import {
 import { enrichSessionWithGit } from "@codeoutcome/git-tracker";
 import {
   canonicalizePath,
-  hashFilePrefix,
+  createFileCheckpoint,
+  matchesFileCheckpoint,
   type Provider,
   type ProviderSelection,
   type SessionAdapter,
@@ -34,6 +35,7 @@ export interface ImportReport extends ImportRunSummary {
   appendedFiles: number;
   rewrittenFiles: number;
   importedEvents: number;
+  processedBytes: number;
   warnings: ImportWarning[];
 }
 
@@ -83,6 +85,7 @@ export async function runImport(options: ImportOptions): Promise<ImportReport> {
   let appendedFiles = 0;
   let rewrittenFiles = 0;
   let importedEvents = 0;
+  let processedBytes = 0;
 
   try {
     for (const adapter of selectedAdapters(
@@ -147,13 +150,15 @@ export async function runImport(options: ImportOptions): Promise<ImportReport> {
         if (
           !dryRun &&
           oldState !== null &&
+          metadata.size > oldState.fileSize &&
           metadata.size >= oldState.processedBytes
         ) {
-          const currentPrefixHash = await hashFilePrefix(
+          const prefixMatches = await matchesFileCheckpoint(
             sourceFile,
             oldState.processedBytes,
+            oldState.processedHash,
           );
-          if (currentPrefixHash === oldState.processedHash) {
+          if (prefixMatches) {
             startOffset = oldState.processedBytes;
             resetSource = false;
             if (metadata.size > oldState.fileSize) {
@@ -182,17 +187,21 @@ export async function runImport(options: ImportOptions): Promise<ImportReport> {
             });
           }
           importedEvents += parsed.usageEvents.length;
+          processedBytes += Math.max(0, parsed.processedBytes - startOffset);
 
           if (dryRun || database === null) {
             importedSessionIds.add(parsed.session.id);
             continue;
           }
 
-          const sourceFileHash = await hashFilePrefix(sourceFile);
-          const processedHash = await hashFilePrefix(
+          const processedHash = await createFileCheckpoint(
             sourceFile,
             parsed.processedBytes,
           );
+          const sourceFileHash =
+            parsed.processedBytes === parsed.fileSize
+              ? processedHash
+              : await createFileCheckpoint(sourceFile);
           const importedAt = now().toISOString();
           const enriched = await enrichSessionWithGit({
             ...parsed.session,
@@ -309,6 +318,7 @@ export async function runImport(options: ImportOptions): Promise<ImportReport> {
       appendedFiles,
       rewrittenFiles,
       importedEvents,
+      processedBytes,
       warnings,
     };
   } catch (error) {

@@ -1,4 +1,11 @@
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -102,6 +109,9 @@ describe("Codex incremental import", () => {
       "utf8",
     );
     await runImport({ adapters: [adapter], database, provider: "codex" });
+    expect(
+      database.getSourceFileState(await realpath(sourceFile))?.processedHash,
+    ).toMatch(/^sampled-v1:/);
     await appendFile(
       sourceFile,
       `${tokenEvent("event-2", "2026-01-01T00:02:00.000Z", 150, 50)}\n`,

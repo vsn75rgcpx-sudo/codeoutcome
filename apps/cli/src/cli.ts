@@ -22,8 +22,10 @@ import {
 import {
   getCodeOutcomePaths,
   inspectDatabase,
+  migrateLegacyDatabase,
   SessionDatabase,
   type CodeOutcomePaths,
+  type LegacyMigrationResult,
 } from "@codeoutcome/database";
 import type { GitProcessRunner } from "@codeoutcome/git-tracker";
 import {
@@ -31,6 +33,7 @@ import {
   redactHomePath,
   type Provider,
   type ProviderSelection,
+  type ProviderFormatSupport,
   type Session,
   type SessionAdapter,
 } from "@codeoutcome/shared";
@@ -219,6 +222,15 @@ function parseProvider(
   );
 }
 
+function selectedCliAdapters(
+  adapters: readonly SessionAdapter[],
+  provider: ProviderSelection,
+): SessionAdapter[] {
+  return adapters.filter(
+    (adapter) => provider === "all" || adapter.provider === provider,
+  );
+}
+
 function parseSince(value: string | undefined, now: Date): string | undefined {
   if (value === undefined) {
     return undefined;
@@ -286,6 +298,14 @@ async function commandVersion(command: string): Promise<string | null> {
   }
 }
 
+function supportedNodeVersion(version = process.versions.node): boolean {
+  const [major = 0, minor = 0] = version
+    .split(".")
+    .slice(0, 2)
+    .map((part) => Number(part));
+  return major > 22 || (major === 22 && minor >= 13);
+}
+
 async function writableDirectoryCheck(
   targetDirectory: string,
 ): Promise<boolean> {
@@ -312,6 +332,16 @@ async function writableDirectoryCheck(
 }
 
 function redacted(value: string, userHome: string): string {
+  const lexicalRelative = path.relative(
+    path.resolve(userHome),
+    path.resolve(value),
+  );
+  if (
+    lexicalRelative === "" ||
+    (!lexicalRelative.startsWith("..") && !path.isAbsolute(lexicalRelative))
+  ) {
+    return lexicalRelative === "" ? "~" : path.join("~", lexicalRelative);
+  }
   return redactHomePath(value, userHome) ?? value;
 }
 
@@ -342,7 +372,10 @@ async function inspectLogRoot(
           check: `${adapter.provider} logs`,
           status: "WARN",
           detail: `Directory is readable but contains no JSONL logs (${shownRoot})`,
-          solution: `Run ${adapter.provider} once or verify the configured log path.`,
+          solution:
+            adapter.provider === "codex"
+              ? "Run Codex once, or set CODEOUTCOME_CODEX_LOG_DIR to the directory that contains its JSONL sessions."
+              : "If you use Claude Code, run it once or set CODEOUTCOME_CLAUDE_LOG_DIR. Otherwise this warning can be ignored.",
         }
       : {
           check: `${adapter.provider} logs`,
@@ -356,7 +389,10 @@ async function inspectLogRoot(
         check: `${adapter.provider} logs`,
         status: "WARN",
         detail: `Log directory does not exist (${shownRoot})`,
-        solution: `Run ${adapter.provider} once or set its CodeOutcome log directory environment variable.`,
+        solution:
+          adapter.provider === "codex"
+            ? "Run Codex once, or set CODEOUTCOME_CODEX_LOG_DIR."
+            : "Claude Code is optional. If you use it, run it once or set CODEOUTCOME_CLAUDE_LOG_DIR.",
       };
     }
     return {
@@ -379,18 +415,23 @@ async function doctorChecks(
     commandVersion("git"),
     commandVersion("pnpm"),
   ]);
+  const nodeSupported = supportedNodeVersion();
   checks.push({
     check: "Node.js",
-    status: "PASS",
+    status: nodeSupported ? "PASS" : "FAIL",
     detail: process.version,
-    solution: null,
+    solution: nodeSupported
+      ? null
+      : "Install Node.js 22.13 or newer, then run `codeoutcome doctor` again.",
   });
   checks.push({
-    check: "pnpm",
-    status: pnpmVersion === null ? "FAIL" : "PASS",
-    detail: pnpmVersion ?? "pnpm command is unavailable",
+    check: "pnpm (source development)",
+    status: pnpmVersion === null ? "WARN" : "PASS",
+    detail: pnpmVersion ?? "Not installed; npm package users do not need pnpm",
     solution:
-      pnpmVersion === null ? "Install pnpm and ensure it is on PATH." : null,
+      pnpmVersion === null
+        ? "Install pnpm only when building CodeOutcome from source."
+        : null,
   });
   checks.push({
     check: "Git",
@@ -444,11 +485,22 @@ async function doctorChecks(
     )),
   );
   for (const adapter of adapters) {
+    const support = adapter.formatSupport ?? [];
+    const fixtureOnly = support.some(
+      (format) => format.validation === "synthetic-fixtures-only",
+    );
     checks.push({
       check: `${adapter.provider} formats`,
-      status: "PASS",
-      detail: adapter.supportedFormats.join("; "),
-      solution: null,
+      status: fixtureOnly ? "WARN" : "PASS",
+      detail:
+        support.length === 0
+          ? adapter.supportedFormats.join("; ")
+          : support
+              .map((format) => `${format.id} (${format.validation})`)
+              .join("; "),
+      solution: fixtureOnly
+        ? "Claude Code support is fixture-tested only in this release; review `codeoutcome formats --provider claude-code` before relying on its totals."
+        : null,
     });
   }
   checks.push({
@@ -521,25 +573,43 @@ async function runDoctorCommand(
     databaseFile: string;
   },
 ): Promise<number> {
-  const parsed = parseArguments(arguments_, ["--json"], []);
+  const parsed = parseArguments(arguments_, ["--json"], ["--provider"]);
+  const provider = parseProvider(parsed.values.get("--provider"), true);
+  const adapters = selectedCliAdapters(context.adapters, provider);
   const checks = await doctorChecks(
-    context.adapters,
+    adapters,
     context.databaseFile,
     context.userHome,
   );
+  const summary = {
+    pass: checks.filter((check) => check.status === "PASS").length,
+    warn: checks.filter((check) => check.status === "WARN").length,
+    fail: checks.filter((check) => check.status === "FAIL").length,
+  };
+  const nextActions = checks
+    .filter((check) => check.solution !== null)
+    .map((check) => `${check.check}: ${check.solution}`);
   if (parsed.booleans.has("--json")) {
-    context.io.stdout(JSON.stringify({ checks }, null, 2));
+    context.io.stdout(
+      JSON.stringify({ provider, summary, checks, nextActions }, null, 2),
+    );
   } else {
     context.io.stdout(
-      table(
-        ["CHECK", "STATUS", "DETAIL", "SOLUTION"],
-        checks.map((check) => [
-          check.check,
-          check.status,
-          check.detail,
-          check.solution ?? "—",
-        ]),
-      ),
+      [
+        table(
+          ["CHECK", "STATUS", "DETAIL", "SOLUTION"],
+          checks.map((check) => [
+            check.check,
+            check.status,
+            check.detail,
+            check.solution ?? "—",
+          ]),
+        ),
+        `Summary: ${summary.pass} PASS, ${summary.warn} WARN, ${summary.fail} FAIL.`,
+        summary.fail > 0
+          ? "Resolve the FAIL items above, then run doctor again."
+          : "Ready for the next step: `codeoutcome import --provider codex --dry-run`.",
+      ].join("\n\n"),
     );
   }
   return checks.some((check) => check.status === "FAIL") ? 1 : 0;
@@ -578,6 +648,14 @@ function duration(session: Session): string {
 
 function formatCost(cost: number | null): string {
   return cost === null ? "unavailable" : `$${cost.toFixed(4)} est.`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const mebibytes = bytes / (1024 * 1024);
+  return mebibytes < 1
+    ? `${(bytes / 1024).toFixed(1)} KiB`
+    : `${mebibytes.toFixed(1)} MiB`;
 }
 
 async function runImportCommand(
@@ -628,6 +706,7 @@ async function runImportCommand(
             "SKIPPED",
             "MALFORMED",
             "EVENTS",
+            "READ",
           ],
           [
             [
@@ -638,6 +717,7 @@ async function runImportCommand(
               String(report.skippedSessions),
               String(report.malformedFiles),
               String(report.importedEvents),
+              formatBytes(report.processedBytes),
             ],
           ],
         ),
@@ -1033,17 +1113,199 @@ async function runUsageCommand(
   return 0;
 }
 
+function declaredFormatSupport(
+  adapter: SessionAdapter,
+): ProviderFormatSupport[] {
+  return adapter.formatSupport === undefined
+    ? adapter.supportedFormats.map((description, index) => ({
+        id: `${adapter.provider}-format-${index + 1}`,
+        description,
+        validation: "synthetic-fixtures-only" as const,
+        recordMarkers: [],
+        limitations: ["Structured compatibility metadata is unavailable"],
+      }))
+    : [...adapter.formatSupport];
+}
+
+async function runFormatsCommand(
+  arguments_: readonly string[],
+  context: Required<Pick<CliOptions, "io">> & {
+    adapters: readonly SessionAdapter[];
+    databaseFile: string;
+  },
+): Promise<number> {
+  const parsed = parseArguments(arguments_, ["--json"], ["--provider"]);
+  const provider = parseProvider(parsed.values.get("--provider"), true);
+  const adapters = selectedCliAdapters(context.adapters, provider);
+  const database = openExistingDatabase(context.databaseFile);
+  const importedFormats = database?.listSourceFormatCounts() ?? [];
+  database?.close();
+  const formats = adapters.flatMap((adapter) =>
+    declaredFormatSupport(adapter).map((format) => ({
+      provider: adapter.provider,
+      ...format,
+      importedFiles:
+        importedFormats.find(
+          (count) =>
+            count.provider === adapter.provider && count.format === format.id,
+        )?.files ?? 0,
+    })),
+  );
+  if (parsed.booleans.has("--json")) {
+    context.io.stdout(
+      JSON.stringify(
+        {
+          provider,
+          formats,
+          unknownImportedFormats: importedFormats.filter(
+            (count) =>
+              !formats.some(
+                (format) =>
+                  format.provider === count.provider &&
+                  format.id === count.format,
+              ),
+          ),
+          note: "Support describes recognized metadata fields, not a stable Provider API guarantee.",
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    context.io.stdout(
+      [
+        table(
+          ["PROVIDER", "FORMAT", "VALIDATION", "IMPORTED", "DESCRIPTION"],
+          formats.map((format) => [
+            format.provider,
+            format.id,
+            format.validation,
+            String(format.importedFiles),
+            format.description,
+          ]),
+        ),
+        ...formats.map(
+          (format) =>
+            `${format.provider}/${format.id}\n  Markers: ${format.recordMarkers.join(", ") || "—"}\n  Limits: ${format.limitations.join("; ") || "—"}`,
+        ),
+        "Support describes recognized metadata fields, not a stable Provider API guarantee.",
+      ].join("\n\n"),
+    );
+  }
+  return 0;
+}
+
+function runFeedbackCommand(
+  arguments_: readonly string[],
+  context: Required<Pick<CliOptions, "io">>,
+): number {
+  const parsed = parseArguments(arguments_, ["--json"], []);
+  const feedback = {
+    sent: false,
+    automaticCollection: false,
+    includesMachineIdentifiers: false,
+    questions: {
+      install: "Did installation succeed? yes/no",
+      import: "Did your selected Provider import succeed? yes/no",
+      clarity: "Was the first useful result obvious? 1-5",
+      returnIntent: "Would you open CodeOutcome again tomorrow? yes/no/maybe",
+      blocker: "What was the first confusing or failing step?",
+    },
+    publicSubmission: {
+      url: "https://github.com/vsn75rgcpx-sudo/codeoutcome/issues/new?template=first_user_feedback.yml",
+      identityNotice:
+        "GitHub shows the submitting account; this transport is not anonymous.",
+    },
+    privacyReminder:
+      "Do not include Provider logs, databases, prompts, source code, credentials, session IDs, or full paths.",
+  } as const;
+  if (parsed.booleans.has("--json")) {
+    context.io.stdout(JSON.stringify(feedback, null, 2));
+  } else {
+    context.io.stdout(
+      [
+        "Optional local feedback card — nothing has been sent.",
+        "Copy only the answers you choose; this template contains no machine identifiers:",
+        ...Object.values(feedback.questions).map((question) => `- ${question}`),
+        "",
+        `Optional public submission: ${feedback.publicSubmission.url}`,
+        feedback.publicSubmission.identityNotice,
+        feedback.privacyReminder,
+      ].join("\n"),
+    );
+  }
+  return 0;
+}
+
+async function runLegacyMigrationCommand(
+  arguments_: readonly string[],
+  context: Required<
+    Pick<CliOptions, "environment" | "io" | "now" | "platform" | "userHome">
+  >,
+): Promise<number> {
+  const parsed = parseArguments(arguments_, ["--dry-run", "--json"], []);
+  let result: LegacyMigrationResult;
+  try {
+    result = await migrateLegacyDatabase({
+      environment: context.environment,
+      userHome: context.userHome,
+      platform: context.platform,
+      dryRun: parsed.booleans.has("--dry-run"),
+      now: context.now,
+    });
+  } catch (error) {
+    throw new Error(redactText(safeError(error), context.userHome));
+  }
+  const safe = {
+    ...result,
+    legacyDataDirectory: redacted(result.legacyDataDirectory, context.userHome),
+    legacyDatabaseFile: redacted(result.legacyDatabaseFile, context.userHome),
+    currentDataDirectory: redacted(
+      result.currentDataDirectory,
+      context.userHome,
+    ),
+    currentDatabaseFile: redacted(result.currentDatabaseFile, context.userHome),
+    backupFile:
+      result.backupFile === null
+        ? null
+        : redacted(result.backupFile, context.userHome),
+    reasons: result.reasons.map((reason) =>
+      redactText(reason, context.userHome),
+    ),
+  };
+  if (parsed.booleans.has("--json")) {
+    context.io.stdout(JSON.stringify(safe, null, 2));
+  } else {
+    context.io.stdout(
+      [
+        `Mode: ${result.dryRun ? "dry-run" : "apply"}`,
+        `Legacy database: ${safe.legacyDatabaseFile}`,
+        `CodeOutcome database: ${safe.currentDatabaseFile}`,
+        `Can migrate: ${result.canMigrate ? "yes" : "no"}`,
+        `Migrated: ${result.migrated ? "yes" : "no"}`,
+        `Backup: ${safe.backupFile ?? "not created"}`,
+        `Schema: ${result.legacyMigrationVersion} → ${result.targetMigrationVersion}`,
+        `Notes: ${safe.reasons.join("; ") || (result.dryRun ? "Preview passed; rerun without --dry-run to create a verified copy." : "Migration completed; the legacy database was retained.")}`,
+      ].join("\n"),
+    );
+  }
+  return result.canMigrate && (result.dryRun || result.migrated) ? 0 : 1;
+}
+
 function help(): string {
   return `CodeOutcome — local-first AI session, Git, and test result accounting
 
 Usage:
   codeoutcome --version
-  codeoutcome doctor [--json]
+  codeoutcome doctor [--provider claude-code|codex|all] [--json]
   codeoutcome import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
   codeoutcome audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
   codeoutcome reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
   codeoutcome sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
   codeoutcome usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
+  codeoutcome formats [--provider claude-code|codex|all] [--json]
+  codeoutcome feedback [--json]
+  codeoutcome data migrate-legacy [--dry-run] [--json]
 ${PHASE3_HELP}
 ${TEST_HELP}
 ${DASHBOARD_HELP}
@@ -1061,7 +1323,6 @@ export async function runCli(
   const platform = options.platform ?? process.platform;
   const now = options.now ?? (() => new Date());
   const io = options.io ?? defaultIo;
-  warnForLegacyEnvironment(environment, io);
   if (arguments_[0] === "--version" || arguments_[0] === "-V") {
     if (arguments_.length !== 1) {
       throw new Error("--version does not accept additional arguments");
@@ -1069,6 +1330,19 @@ export async function runCli(
     io.stdout(CODEOUTCOME_VERSION);
     return 0;
   }
+  const [earlyCommand = "help", ...earlyArguments] = arguments_;
+  if (
+    earlyCommand === "help" ||
+    earlyCommand === "--help" ||
+    earlyCommand === "-h"
+  ) {
+    io.stdout(help());
+    return 0;
+  }
+  if (earlyCommand === "feedback") {
+    return runFeedbackCommand(earlyArguments, { io });
+  }
+  warnForLegacyEnvironment(environment, io);
   const adapters = options.adapters ?? defaultAdapters(environment, userHome);
   const resolvedPaths =
     options.databaseFile === undefined
@@ -1160,6 +1434,25 @@ export async function runCli(
         databaseFile,
         io,
         now,
+      });
+    case "formats":
+      return runFormatsCommand(commandArguments, {
+        adapters,
+        databaseFile,
+        io,
+      });
+    case "feedback":
+      return runFeedbackCommand(commandArguments, { io });
+    case "data":
+      if (commandArguments[0] !== "migrate-legacy") {
+        throw new Error("data requires migrate-legacy or delete-tests");
+      }
+      return runLegacyMigrationCommand(commandArguments.slice(1), {
+        environment,
+        io,
+        now,
+        platform,
+        userHome,
       });
     case "help":
     case "--help":

@@ -231,13 +231,32 @@ async function runWrappedCommand(
   context: TestCliContext,
 ): Promise<number> {
   const separator = arguments_.indexOf("--");
-  if (separator < 0) {
-    throw new Error("test run requires `-- <executable> [args...]`");
+  let wrapperArguments: readonly string[];
+  let command: readonly string[];
+  if (separator >= 0) {
+    wrapperArguments = arguments_.slice(0, separator);
+    command = arguments_.slice(separator + 1);
+  } else {
+    let commandStart = 0;
+    while (commandStart < arguments_.length) {
+      const argument = arguments_[commandStart];
+      if (argument === "--json") {
+        commandStart += 1;
+        continue;
+      }
+      if (argument === "--stage" || argument === "--framework") {
+        commandStart += 2;
+        continue;
+      }
+      break;
+    }
+    wrapperArguments = arguments_.slice(0, commandStart);
+    command = arguments_.slice(commandStart);
   }
-  const wrapperArguments = arguments_.slice(0, separator);
-  const command = arguments_.slice(separator + 1);
-  if (command[0] === undefined)
-    throw new Error("test run requires an executable after `--`");
+  if (command[0] === undefined || command[0].trim().length === 0)
+    throw new Error(
+      "test run requires an executable, for example `codeoutcome test pnpm test`",
+    );
   const parsed = parseFlags(
     wrapperArguments,
     ["--json"],
@@ -627,9 +646,7 @@ export async function runTestCli(
       case "abandon":
         return runRecovery(subcommand, rest, context);
       default:
-        throw new Error(
-          "test requires run, import, list, show, compare, link, unlink, recover, or abandon",
-        );
+        return runWrappedCommand([subcommand ?? "", ...rest], context);
     }
   }
   if (command === "data" && subcommand === "delete-tests") {
@@ -638,7 +655,8 @@ export async function runTestCli(
   return null;
 }
 
-export const TEST_HELP = `  codeoutcome test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
+export const TEST_HELP = `  codeoutcome test <executable> [args...]
+  codeoutcome test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] [--] <executable> [args...]
   codeoutcome test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
   codeoutcome test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
   codeoutcome test show <test-run-id> [--json]

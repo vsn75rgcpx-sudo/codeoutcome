@@ -35,13 +35,16 @@ describe("CLI JSON output", () => {
   it("reports the unified prerelease version", async () => {
     const output = memoryIo();
     expect(await runCli(["--version"], { io: output.io })).toBe(0);
-    expect(output.stdout).toEqual(["0.1.0-alpha.1"]);
+    expect(output.stdout).toEqual(["0.1.0-alpha.2"]);
   });
 
   it("warns without exposing values when a legacy environment name is used", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-cli-"));
+    temporaryDirectories.push(directory);
     const output = memoryIo();
     expect(
-      await runCli(["--version"], {
+      await runCli(["doctor", "--provider", "codex", "--json"], {
+        databaseFile: path.join(directory, "codeoutcome.sqlite"),
         environment: {
           AGENTLEDGER_CLAUDE_LOG_DIR: "/private/legacy-logs",
         },

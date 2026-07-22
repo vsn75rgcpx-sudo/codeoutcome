@@ -35,6 +35,34 @@ afterEach(async () => {
 });
 
 describe("test CLI", () => {
+  it("runs a test command without requiring the run subcommand or separator", async () => {
+    const fixture = await context();
+    let invocation: {
+      executable: string;
+      arguments: readonly string[];
+    } | null = null;
+    const exitCode = await runCli(
+      ["test", "--stage", "baseline", "fake-test", "--watch=false"],
+      {
+        databaseFile: fixture.databaseFile,
+        workingDirectory: fixture.directory,
+        userHome: fixture.directory,
+        io: fixture.io,
+        testProcessRunner: async (executable, arguments_) => {
+          invocation = { executable, arguments: arguments_ };
+          return { exitCode: 0, signal: null };
+        },
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(invocation).toEqual({
+      executable: "fake-test",
+      arguments: ["--watch=false"],
+    });
+    expect(fixture.stdout.at(-1)).toContain("Stage: baseline");
+  });
+
   it("returns original exit codes and produces private JSON list/show output", async () => {
     const fixture = await context();
     const runner: TestProcessRunner = async (

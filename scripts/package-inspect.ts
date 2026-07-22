@@ -61,6 +61,27 @@ const { stdout: manifestText } = await execFileAsync("tar", [
   tarball,
   "package/package.json",
 ]);
+const manifest = JSON.parse(manifestText) as {
+  name?: unknown;
+  version?: unknown;
+  private?: unknown;
+  repository?: { url?: unknown };
+  publishConfig?: { access?: unknown; tag?: unknown };
+  os?: unknown;
+};
+if (
+  manifest.name !== "codeoutcome" ||
+  manifest.version !== CODEOUTCOME_VERSION ||
+  manifest.private === true ||
+  manifest.repository?.url !==
+    "git+https://github.com/vsn75rgcpx-sudo/codeoutcome.git" ||
+  manifest.publishConfig?.access !== "public" ||
+  manifest.publishConfig.tag !== "latest" ||
+  !Array.isArray(manifest.os) ||
+  manifest.os.join(",") !== "darwin,linux"
+) {
+  throw new Error("Package publication metadata is incomplete or unsafe");
+}
 const combinedText = `${cli}\n${manifestText}\n${await readFile("README.md", "utf8")}`;
 const normalizedCombinedText = combinedText.replaceAll("\\", "/");
 const normalizedHome = homedir().replaceAll("\\", "/");
@@ -101,6 +122,7 @@ console.log(
       executable: true,
       shebang: true,
       dashboardAssets: true,
+      publicationMetadata: true,
       forbiddenEntries: 0,
       localPathMarkers: 0,
     },

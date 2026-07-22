@@ -13,18 +13,18 @@ Local-first session accounting and review for Claude Code and OpenAI Codex.
 - **Recorded test results:** explicit aggregate runs and comparisons.
 - **Read-only local Dashboard:** loopback-only API with a per-start token.
 
-> **Source alpha — 0.1.0-alpha.1.** Build from a trusted checkout or install the
-> checksum-verified GitHub Release tarball locally. The package is not published
-> to npm. Log formats and metadata contracts may change.
+> **Public alpha — 0.1.0-alpha.2.** Install from npm or build from a trusted
+> checkout. Log formats and metadata contracts may change. Claude Code support
+> is synthetic-fixture tested only; Codex has local-log validation.
 
 ## Quick start
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm build
-pnpm cli doctor
-pnpm cli import --provider all
-pnpm cli dashboard
+npm install --global codeoutcome
+codeoutcome doctor --provider codex
+codeoutcome import --provider codex
+codeoutcome usage --weekly
+codeoutcome dashboard
 ```
 
 CodeOutcome saves accounting, repository, observed Git, and aggregate test
@@ -33,16 +33,18 @@ raw test output, environment variables, or credentials. The Dashboard is a
 local web UI—not a desktop app or remote service—and must not be exposed through
 a proxy or port forward. See [Privacy](PRIVACY.md).
 
-Current limits: macOS and Linux are the validated targets; pricing is a bundled
-versioned estimate and unknown models remain unavailable; Provider log formats
-may evolve; Git/test associations describe timing and repository context, never
-exact AI authorship. There is no cloud sync, account system, VS Code plugin,
-remote Dashboard, or productivity score.
+Current limits: macOS is manually validated and Linux package installation is
+validated on GitHub-hosted Ubuntu machines; Windows is blocked by package
+metadata until verified. Claude Code compatibility is fixture-tested rather
+than real-log validated. Pricing is a bundled versioned estimate and unknown
+models remain unavailable. Provider formats may evolve; Git/test associations
+describe context, never exact AI authorship. There is no telemetry, cloud sync,
+account system, remote Dashboard, or productivity score.
 
 ## Requirements
 
 - Node.js 22.13 or newer (for the built-in SQLite runtime)
-- pnpm 11 or newer
+- pnpm 11 or newer only when developing from source
 - Git (used read-only for repository state and machine-readable change metadata)
 
 ## Install and develop
@@ -68,7 +70,7 @@ pnpm cli sessions --limit 10
 pnpm cli usage --weekly
 pnpm cli git snapshot
 pnpm cli track start --provider codex --label "investigate timeout"
-pnpm cli test run --stage baseline -- pnpm test
+pnpm cli test --stage baseline pnpm test
 pnpm cli test import --file ./report.xml --format junit
 pnpm cli test compare --tracking-run <tracking-run-id>
 pnpm cli track stop
@@ -83,7 +85,7 @@ published package exposes the same program as `codeoutcome`.
 ## Commands
 
 ```text
-codeoutcome doctor [--json]
+codeoutcome doctor [--provider claude-code|codex|all] [--json]
 codeoutcome import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
 codeoutcome audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
 codeoutcome reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
@@ -100,7 +102,8 @@ codeoutcome track recover [tracking-run-id|--list]
 codeoutcome track abandon <tracking-run-id>
 codeoutcome run codex [-- <codex arguments>]
 codeoutcome config set privacy git-metadata|strict
-codeoutcome test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
+codeoutcome test <executable> [args...]
+codeoutcome test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] [--] <executable> [args...]
 codeoutcome test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
 codeoutcome test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
 codeoutcome test show <test-run-id> [--json]
@@ -112,6 +115,9 @@ codeoutcome test unlink <test-run-id>
 codeoutcome test recover <test-run-id>|--list
 codeoutcome test abandon <test-run-id>
 codeoutcome data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]
+codeoutcome data migrate-legacy [--dry-run] [--json]
+codeoutcome formats [--provider claude-code|codex|all] [--json]
+codeoutcome feedback [--json]
 codeoutcome dashboard [--no-open] [--port 4567] [--host 127.0.0.1] [--json]
 ```
 
@@ -156,18 +162,24 @@ CODEOUTCOME_DATA_DIR=/path/to/local/data pnpm cli import
 The pre-release project name used
 `~/Library/Application Support/AgentLedger/agentledger.sqlite` on macOS (and an
 `agentledger` XDG data directory on Linux). CodeOutcome never moves or renames
-that database automatically. If the new CodeOutcome data directory does not
-exist and the legacy database does, the CLI uses the legacy location in
+that database automatically. If the new CodeOutcome database does not exist
+and the legacy database does, the CLI uses the legacy location in
 compatibility mode and prints a warning. A new CodeOutcome database always
 takes precedence.
 
 The former `AGENTLEDGER_DATA_DIR`, `AGENTLEDGER_CLAUDE_LOG_DIR`,
 `AGENTLEDGER_CODEX_LOG_DIR`, and `AGENTLEDGER_TRACKING_RUN_ID` names remain
 temporarily readable with a deprecation warning. Prefer their `CODEOUTCOME_*`
-replacements. An explicit migration command is intentionally deferred until its
-backup and conflict workflow can receive dedicated testing; for now, keep the
-legacy database in place or copy it manually only after stopping all processes
-and creating a verified backup.
+replacements. Preview an explicit migration without changing either location:
+
+```sh
+codeoutcome data migrate-legacy --dry-run
+```
+
+If the preview passes, `codeoutcome data migrate-legacy` creates a verified
+SQLite backup, migrates a separate copy, runs `quick_check`, and installs the
+new database only when the destination does not exist. The legacy database is
+retained. It never reads Provider logs or content fields during migration.
 
 Durations such as `7d`, `24h`, and `4w` are supported by `--since`. Date
 filtering and report buckets use UTC.
@@ -236,9 +248,11 @@ deletion automatically.
 
 ## Current format support
 
-The Claude Code adapter supports project JSONL records containing session
+The Claude Code adapter fixture-tests project JSONL records containing session
 metadata on top-level `user`/`assistant` objects and token counts under
-`message.usage` (with conservative aliases for older field names).
+`message.usage` (with conservative aliases for older field names). No real
+Claude Code log was used to validate this release. Check the evidence label
+with `codeoutcome formats --provider claude-code`.
 
 The Codex adapter supports rollout JSONL records including `session_meta`,
 `turn_context`, and `event_msg` records whose token data is under
@@ -246,8 +260,10 @@ The Codex adapter supports rollout JSONL records including `session_meta`,
 accepts conservative older `usage` locations.
 
 Both adapters tolerate unknown fields, missing metadata, malformed complete
-lines, and a truncated final line. Very large files are processed line by line
-from the last verified byte checkpoint instead of being loaded into memory.
+lines, and a truncated final line. Files are streamed rather than loaded in
+full, individual JSONL lines are bounded to 16 MiB, and append checkpoints use
+fixed-size samples so append validation does not repeatedly hash the entire
+history. Oversized records are skipped with a malformed-line warning.
 
 Codex `total_token_usage` is treated as a cumulative session snapshot. The last
 valid snapshot by event time is canonical; historical snapshots remain
@@ -269,6 +285,8 @@ being presented as zero.
 
 See [Usage accounting](docs/usage-accounting.md) for exact token semantics,
 incremental-import behavior, and known risks. See
+[Provider compatibility](docs/provider-compatibility.md) for field markers and
+validation status. See
 [Git tracking](docs/git-tracking.md) for snapshot, confidence, privacy, and
 recovery semantics. See [Test tracking](docs/test-tracking.md) for wrapper,
 report, comparison, privacy, recovery, and deletion semantics. See
@@ -278,9 +296,18 @@ report, comparison, privacy, recovery, and deletion semantics. See
 For setup and project participation, see [Installation](docs/installation.md),
 [Troubleshooting](docs/troubleshooting.md), [Accessibility](docs/accessibility.md),
 [Redaction](docs/redaction-guide.md), [Contributing](CONTRIBUTING.md),
-[Security](SECURITY.md), [Privacy](PRIVACY.md), and the [Changelog](CHANGELOG.md).
+[Security](SECURITY.md), [Privacy](PRIVACY.md), [Releasing](docs/releasing.md),
+and the [Changelog](CHANGELOG.md).
 
 Repository: [github.com/vsn75rgcpx-sudo/codeoutcome](https://github.com/vsn75rgcpx-sudo/codeoutcome)
+
+## Optional feedback
+
+`codeoutcome feedback` prints a local, identifier-free first-use feedback card.
+It sends nothing and makes no network request. Users may copy only the answers
+they choose. The optional GitHub form is public and GitHub account identity is
+visible, so CodeOutcome does not mislabel that transport as anonymous. Never
+attach real Provider logs or a database.
 
 ## Test tracking limits
 

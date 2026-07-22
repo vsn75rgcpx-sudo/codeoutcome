@@ -42,6 +42,25 @@ export class ClaudeCodeAdapter implements SessionAdapter {
   readonly supportedFormats = [
     "Claude Code project JSONL: user/assistant records with message.usage",
   ] as const;
+  readonly formatSupport = [
+    {
+      id: "claude-code-project-jsonl-v1",
+      description:
+        "Claude Code project JSONL with user/assistant records and message.usage",
+      validation: "synthetic-fixtures-only",
+      recordMarkers: [
+        "sessionId",
+        "message.model",
+        "message.usage.input_tokens",
+        "message.usage.output_tokens",
+      ],
+      limitations: [
+        "Validated with manually constructed fixtures only",
+        "No local Claude Code account or real log was used for this release",
+        "Provider format changes can produce partial accounting warnings",
+      ],
+    },
+  ] as const;
 
   constructor(readonly logRoot = path.join(homedir(), ".claude", "projects")) {}
 

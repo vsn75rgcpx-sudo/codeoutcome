@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -15,8 +15,10 @@ import {
 import {
   backupDatabase,
   getCodeOutcomePaths,
+  getLegacyMigrationPaths,
   inspectDatabase,
   LATEST_MIGRATION_VERSION,
+  migrateLegacyDatabase,
   SessionDatabase,
   type SourceImportInput,
 } from "./index.js";
@@ -258,6 +260,7 @@ describe("SessionDatabase migrations and queries", () => {
     const backupFile = path.join(directory, "backups", "fixture.sqlite");
     await backupDatabase(databaseFile, backupFile);
     await expect(access(backupFile)).resolves.toBeUndefined();
+    expect((await stat(backupFile)).mode & 0o777).toBe(0o600);
     const backup = new SessionDatabase(backupFile, { readOnly: true });
     expect(backup.migrationVersion()).toBe(LATEST_MIGRATION_VERSION);
     expect(backup.quickCheck()).toBe("ok");
@@ -370,7 +373,7 @@ describe("CodeOutcome data path compatibility", () => {
     });
   });
 
-  it("discovers a legacy database only while the new directory is absent", async () => {
+  it("discovers a legacy database until the new database exists", async () => {
     const userHome = await mkdtemp(path.join(tmpdir(), "codeoutcome-home-"));
     temporaryDirectories.push(userHome);
     const legacyDirectory = path.join(
@@ -396,6 +399,19 @@ describe("CodeOutcome data path compatibility", () => {
       { recursive: true },
     );
     expect(getCodeOutcomePaths({}, userHome, "darwin")).toMatchObject({
+      source: "legacy-default",
+      legacy: true,
+    });
+    new SessionDatabase(
+      path.join(
+        userHome,
+        "Library",
+        "Application Support",
+        "CodeOutcome",
+        "codeoutcome.sqlite",
+      ),
+    ).close();
+    expect(getCodeOutcomePaths({}, userHome, "darwin")).toMatchObject({
       source: "current-default",
       legacy: false,
     });
@@ -414,5 +430,83 @@ describe("CodeOutcome data path compatibility", () => {
       source: "legacy-environment",
       legacy: true,
     });
+  });
+
+  it("previews and explicitly migrates legacy data without changing the original", async () => {
+    const userHome = await mkdtemp(path.join(tmpdir(), "codeoutcome-home-"));
+    temporaryDirectories.push(userHome);
+    const paths = getLegacyMigrationPaths({}, userHome, "darwin");
+    const legacy = new SessionDatabase(paths.legacyDatabaseFile);
+    const session = sessionFixture(
+      "codex",
+      "legacy-migration-session",
+      "2026-07-01T00:00:00.000Z",
+      path.join(userHome, "redacted-session.jsonl"),
+    );
+    legacy.applySourceImport(
+      sourceImport(session, path.join(userHome, "repo")),
+    );
+    legacy.close();
+
+    const preview = await migrateLegacyDatabase({
+      environment: {},
+      userHome,
+      platform: "darwin",
+      dryRun: true,
+      now: () => new Date("2026-07-22T00:00:00.000Z"),
+    });
+    expect(preview).toMatchObject({
+      dryRun: true,
+      canMigrate: true,
+      migrated: false,
+      backupFile: null,
+    });
+    expect(inspectDatabase(paths.currentDatabaseFile).exists).toBe(false);
+
+    const result = await migrateLegacyDatabase({
+      environment: {},
+      userHome,
+      platform: "darwin",
+      now: () => new Date("2026-07-22T00:00:00.000Z"),
+    });
+    expect(result.canMigrate).toBe(true);
+    expect(result.migrated).toBe(true);
+    expect(result.backupFile).not.toBeNull();
+    await expect(access(result.backupFile!)).resolves.toBeUndefined();
+    expect(inspectDatabase(paths.legacyDatabaseFile)).toMatchObject({
+      exists: true,
+      ok: true,
+    });
+    expect(inspectDatabase(paths.currentDatabaseFile)).toMatchObject({
+      exists: true,
+      ok: true,
+      pendingMigrations: 0,
+    });
+    const current = new SessionDatabase(paths.currentDatabaseFile, {
+      readOnly: true,
+    });
+    expect(current.getSession(session.id)?.providerSessionId).toBe(
+      "legacy-migration-session",
+    );
+    current.close();
+  });
+
+  it("refuses legacy migration when the destination already exists", async () => {
+    const userHome = await mkdtemp(path.join(tmpdir(), "codeoutcome-home-"));
+    temporaryDirectories.push(userHome);
+    const paths = getLegacyMigrationPaths({}, userHome, "darwin");
+    new SessionDatabase(paths.legacyDatabaseFile).close();
+    new SessionDatabase(paths.currentDatabaseFile).close();
+
+    const result = await migrateLegacyDatabase({
+      environment: {},
+      userHome,
+      platform: "darwin",
+    });
+    expect(result.canMigrate).toBe(false);
+    expect(result.migrated).toBe(false);
+    expect(result.reasons).toContain(
+      "CodeOutcome destination database already exists",
+    );
   });
 });
