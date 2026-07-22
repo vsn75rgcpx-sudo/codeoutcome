@@ -131,21 +131,24 @@ describe("dashboard CLI", () => {
       closeCalls += 1;
       resolveClosed?.();
     };
-    const listenersBefore = process.listenerCount("SIGINT");
+    let resolveServerStarted: (() => void) | undefined;
+    const serverStarted = new Promise<void>((resolve) => {
+      resolveServerStarted = resolve;
+    });
     const running = runCli(["dashboard", "--no-open"], {
       databaseFile: path.join(dataDirectory, "codeoutcome.sqlite"),
       userHome: dataDirectory,
       io: output.io,
-      dashboardStarter: async () => server,
+      dashboardStarter: async () => {
+        resolveServerStarted?.();
+        return server;
+      },
     });
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      if (process.listenerCount("SIGINT") > listenersBefore) break;
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    }
-    expect(process.listenerCount("SIGINT")).toBeGreaterThan(listenersBefore);
+    await serverStarted;
+    await new Promise<void>((resolve) => setImmediate(resolve));
     process.emit("SIGINT");
-    expect(await running).toBe(0);
     expect(closeCalls).toBe(1);
+    expect(await running).toBe(0);
   });
 
   it("rejects invalid ports before starting a server", async () => {
