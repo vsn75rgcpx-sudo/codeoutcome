@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 env:
-  CODEOUTCOME_DATA_DIR: ${{ runner.temp }}/codeoutcome-data
-  CODEOUTCOME_CLAUDE_LOG_DIR: ${{ runner.temp }}/provider-logs/claude
-  CODEOUTCOME_CODEX_LOG_DIR: ${{ runner.temp }}/provider-logs/codex
+  CODEOUTCOME_DATA_DIR: /tmp/codeoutcome-data
+  CODEOUTCOME_CLAUDE_LOG_DIR: /tmp/provider-logs/claude
+  CODEOUTCOME_CODEX_LOG_DIR: /tmp/provider-logs/codex
 
 jobs:
   quality:
