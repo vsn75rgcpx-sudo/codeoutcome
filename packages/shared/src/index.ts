@@ -678,3 +678,4 @@ export function redactHomePath(
 }
 
 export * from "./dashboard.js";
+export * from "./version.js";

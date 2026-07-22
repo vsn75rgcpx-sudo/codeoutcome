@@ -95,14 +95,22 @@ export default function DiagnosticsPage() {
       </div>
       <section className="panel">
         <h2>Provider log directories</h2>
-        <div className="table-scroll">
+        <div
+          className="table-scroll"
+          role="region"
+          aria-label="Provider log directory status table"
+          tabIndex={0}
+        >
           <table>
+            <caption className="sr-only">
+              Read-only status of configured Provider log directories
+            </caption>
             <thead>
               <tr>
-                <th>Provider</th>
-                <th>Status</th>
-                <th>Readable</th>
-                <th>Path</th>
+                <th scope="col">Provider</th>
+                <th scope="col">Status</th>
+                <th scope="col">Readable</th>
+                <th scope="col">Path</th>
               </tr>
             </thead>
             <tbody>

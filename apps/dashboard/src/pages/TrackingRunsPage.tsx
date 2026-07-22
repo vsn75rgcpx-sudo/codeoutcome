@@ -183,24 +183,32 @@ export default function TrackingRunsPage() {
         />
       ) : (
         <>
-          <div className="table-scroll panel">
+          <div
+            className="table-scroll panel"
+            role="region"
+            aria-label="Tracking runs table"
+            tabIndex={0}
+          >
             <table>
+              <caption className="sr-only">
+                Tracking runs with observed Git and test metadata
+              </caption>
               <thead>
                 <tr>
-                  <th>Label / started</th>
-                  <th>Provider</th>
-                  <th>Duration</th>
-                  <th>Repository</th>
-                  <th>Branch</th>
-                  <th>Start / end HEAD</th>
-                  <th>Dirty start/end</th>
-                  <th>Files</th>
-                  <th>+ / −</th>
-                  <th>Tests</th>
-                  <th>Baseline / final</th>
-                  <th>Confidence</th>
-                  <th>Status</th>
-                  <th>Warnings</th>
+                  <th scope="col">Label / started</th>
+                  <th scope="col">Provider</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Repository</th>
+                  <th scope="col">Branch</th>
+                  <th scope="col">Start / end HEAD</th>
+                  <th scope="col">Dirty start/end</th>
+                  <th scope="col">Files</th>
+                  <th scope="col">+ / −</th>
+                  <th scope="col">Tests</th>
+                  <th scope="col">Baseline / final</th>
+                  <th scope="col">Confidence</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Warnings</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,7 +252,9 @@ export default function TrackingRunsPage() {
                       <StatusBadge value={run.finalOutcome} />
                     </td>
                     <td>
-                      {run.linkConfidenceLevel ?? "unlinked"}
+                      <StatusBadge
+                        value={run.linkConfidenceLevel ?? "unlinked"}
+                      />
                       {run.linkConfidence === null
                         ? ""
                         : ` · ${run.linkConfidence.toFixed(2)}`}
@@ -253,9 +263,13 @@ export default function TrackingRunsPage() {
                       <StatusBadge value={run.status} />
                     </td>
                     <td>
-                      {run.warnings.length === 0
-                        ? "—"
-                        : run.warnings.join(", ")}
+                      {run.warnings.length === 0 ? (
+                        "—"
+                      ) : (
+                        <span className="warning-text">
+                          {run.warnings.join(", ")}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

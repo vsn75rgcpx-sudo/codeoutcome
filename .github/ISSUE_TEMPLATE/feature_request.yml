@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a privacy-preserving local-first improvement.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include real logs, database rows, Prompt/response content, source code, paths, or credentials.
+  - type: textarea
+    id: need
+    attributes:
+      label: User need
+      description: What local workflow or decision would this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and security impact
+      description: What would be read, stored, displayed, or transmitted?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

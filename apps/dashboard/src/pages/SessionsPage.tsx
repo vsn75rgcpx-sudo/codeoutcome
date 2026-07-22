@@ -154,23 +154,31 @@ export default function SessionsPage() {
         />
       ) : (
         <>
-          <div className="table-scroll panel">
+          <div
+            className="table-scroll panel"
+            role="region"
+            aria-label="Sessions table"
+            tabIndex={0}
+          >
             <table>
+              <caption className="sr-only">
+                Session metadata and canonical Token accounting
+              </caption>
               <thead>
                 <tr>
-                  <th>Started</th>
-                  <th>Provider</th>
-                  <th>Model</th>
-                  <th>Duration</th>
-                  <th>Repository</th>
-                  <th>Branch</th>
-                  <th>Input</th>
-                  <th>Cache</th>
-                  <th>Output</th>
-                  <th>Total</th>
-                  <th>Method</th>
-                  <th>Status</th>
-                  <th>Tracking</th>
+                  <th scope="col">Started</th>
+                  <th scope="col">Provider</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Repository</th>
+                  <th scope="col">Branch</th>
+                  <th scope="col">Input</th>
+                  <th scope="col">Cache</th>
+                  <th scope="col">Output</th>
+                  <th scope="col">Total</th>
+                  <th scope="col">Method</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Tracking</th>
                 </tr>
               </thead>
               <tbody>

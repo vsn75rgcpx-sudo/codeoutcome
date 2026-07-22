@@ -169,16 +169,24 @@ export default function TrackingDetailPage() {
         {run.gitAreas.length === 0 ? (
           <p className="muted">No observed file metadata.</p>
         ) : (
-          <div className="table-scroll">
+          <div
+            className="table-scroll"
+            role="region"
+            aria-label="Observed Git area summary table"
+            tabIndex={0}
+          >
             <table>
+              <caption className="sr-only">
+                Aggregate observed Git changes by area and change type
+              </caption>
               <thead>
                 <tr>
-                  <th>Area</th>
-                  <th>Change</th>
-                  <th>Files</th>
-                  <th>Additions</th>
-                  <th>Deletions</th>
-                  <th>Binary</th>
+                  <th scope="col">Area</th>
+                  <th scope="col">Change</th>
+                  <th scope="col">Files</th>
+                  <th scope="col">Additions</th>
+                  <th scope="col">Deletions</th>
+                  <th scope="col">Binary</th>
                 </tr>
               </thead>
               <tbody>

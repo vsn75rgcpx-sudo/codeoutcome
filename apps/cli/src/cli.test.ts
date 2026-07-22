@@ -32,6 +32,12 @@ function memoryIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
 }
 
 describe("CLI JSON output", () => {
+  it("reports the unified prerelease version", async () => {
+    const output = memoryIo();
+    expect(await runCli(["--version"], { io: output.io })).toBe(0);
+    expect(output.stdout).toEqual(["0.1.0-alpha.1"]);
+  });
+
   it("imports private logs and emits metadata-only sessions and weekly usage", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "agentledger-cli-"));
     temporaryDirectories.push(directory);

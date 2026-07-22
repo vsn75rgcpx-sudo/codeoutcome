@@ -10,6 +10,8 @@
     "apps/**/*.ts",
     "apps/**/*.tsx",
     "packages/**/*.ts",
+    "packaging/**/*.ts",
+    "scripts/**/*.ts",
     "vitest.config.ts",
     "eslint.config.js"
   ]

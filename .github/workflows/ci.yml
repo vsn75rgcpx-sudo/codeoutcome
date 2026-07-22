@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AGENTLEDGER_DATA_DIR: ${{ runner.temp }}/agentledger-data
+  AGENTLEDGER_CLAUDE_LOG_DIR: ${{ runner.temp }}/provider-logs/claude
+  AGENTLEDGER_CODEX_LOG_DIR: ${{ runner.temp }}/provider-logs/codex
+  HOME: ${{ runner.temp }}/agentledger-home
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+      - name: Prepare isolated local directories
+        run: mkdir -p "$HOME" "$AGENTLEDGER_DATA_DIR" "$AGENTLEDGER_CLAUDE_LOG_DIR" "$AGENTLEDGER_CODEX_LOG_DIR"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm dashboard:test
+      - run: pnpm build
+      - run: pnpm demo:smoke
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+      - run: mkdir -p "$HOME" "$AGENTLEDGER_DATA_DIR" "$AGENTLEDGER_CLAUDE_LOG_DIR" "$AGENTLEDGER_CODEX_LOG_DIR"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+      - name: Upload synthetic failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-synthetic-failures
+          path: artifacts/playwright
+          retention-days: 7
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.1
+          cache: pnpm
+      - run: mkdir -p "$HOME" "$AGENTLEDGER_DATA_DIR" "$AGENTLEDGER_CLAUDE_LOG_DIR" "$AGENTLEDGER_CODEX_LOG_DIR"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package:pack
+      - run: pnpm package:inspect
+      - run: pnpm package:test-install

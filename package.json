@@ -1,6 +1,6 @@
 {
   "name": "agentledger",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Local-first session review for Claude Code and OpenAI Codex",
   "private": true,
   "type": "module",
@@ -19,6 +19,16 @@
     "dashboard:dev": "pnpm dashboard:build && pnpm cli dashboard --no-open",
     "dashboard:build": "pnpm --filter @agentledger/dashboard build",
     "dashboard:test": "vitest run packages/dashboard-server apps/dashboard apps/cli/src/dashboard-cli.test.ts",
+    "demo:seed": "tsx scripts/demo-seed.ts",
+    "demo:dashboard": "pnpm demo:seed && pnpm dashboard:build && AGENTLEDGER_DATA_DIR=$PWD/artifacts/demo pnpm cli dashboard --no-open",
+    "demo:smoke": "pnpm demo:seed && pnpm dashboard:build && tsx scripts/demo-dashboard-smoke.ts",
+    "demo:screenshots": "pnpm dashboard:build && tsx scripts/demo-screenshots.ts",
+    "e2e": "pnpm dashboard:build && playwright test",
+    "accessibility:test": "pnpm dashboard:build && playwright test apps/dashboard-e2e/accessibility.spec.ts",
+    "package:build": "pnpm build && tsx scripts/package-prepare.ts && vite build --config packaging/vite.config.ts",
+    "package:pack": "pnpm package:build && tsx scripts/package-pack.ts",
+    "package:inspect": "tsx scripts/package-inspect.ts",
+    "package:test-install": "tsx scripts/package-test-install.ts",
     "cli": "tsx apps/cli/src/index.ts"
   },
   "engines": {
@@ -26,7 +36,9 @@
   },
   "packageManager": "pnpm@11.15.1",
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "1.61.1",
     "@types/node": "^24.10.1",
     "eslint": "^9.39.1",
     "prettier": "^3.7.4",

@@ -73,6 +73,17 @@ sanitized errors without SQL or absolute paths.
 
 ## Pages
 
+The committed images below are captured by Playwright from the deterministic,
+fully synthetic Demo database at a fixed 1440×900 viewport. They are not mockups.
+
+![AgentLedger Overview in the light theme using synthetic Demo data](assets/dashboard-overview-light.png)
+
+![AgentLedger Overview in the dark theme using synthetic Demo data](assets/dashboard-overview-dark.png)
+
+![AgentLedger tracking detail with observed Git and aggregate test metadata](assets/dashboard-tracking-detail.png)
+
+![AgentLedger session detail with canonical Token accounting](assets/dashboard-session-detail.png)
+
 - **Overview** shows import state, session and Token totals, Provider/model
   distributions, daily trends, observed Git/test aggregates, comparable
   failing-to-passing changes, and recent metadata activity. Unknown pricing is

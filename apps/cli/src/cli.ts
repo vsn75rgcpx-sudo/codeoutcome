@@ -26,6 +26,7 @@ import {
 } from "@agentledger/database";
 import type { GitProcessRunner } from "@agentledger/git-tracker";
 import {
+  AGENTLEDGER_VERSION,
   redactHomePath,
   type Provider,
   type ProviderSelection,
@@ -992,6 +993,7 @@ function help(): string {
   return `AgentLedger — local-first AI session, Git, and test result accounting
 
 Usage:
+  agentledger --version
   agentledger doctor [--json]
   agentledger import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
   agentledger audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
@@ -1015,6 +1017,13 @@ export async function runCli(
   const platform = options.platform ?? process.platform;
   const now = options.now ?? (() => new Date());
   const io = options.io ?? defaultIo;
+  if (arguments_[0] === "--version" || arguments_[0] === "-V") {
+    if (arguments_.length !== 1) {
+      throw new Error("--version does not accept additional arguments");
+    }
+    io.stdout(AGENTLEDGER_VERSION);
+    return 0;
+  }
   const adapters = options.adapters ?? defaultAdapters(environment, userHome);
   const databaseFile =
     options.databaseFile ??

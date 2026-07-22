@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { readAgentLedgerConfig } from "@agentledger/core";
+import { AGENTLEDGER_VERSION } from "@agentledger/shared";
 import {
   startDashboardServer,
   type RunningDashboardServer,
@@ -105,7 +106,7 @@ export async function runDashboardCli(
     codexLogDirectory:
       context.environment.AGENTLEDGER_CODEX_LOG_DIR ??
       path.join(context.userHome, ".codex", "sessions"),
-    version: "0.1.0",
+    version: AGENTLEDGER_VERSION,
     host: parsed.host,
     port: parsed.port,
     staticRoot: context.staticRoot ?? defaultStaticRoot(),

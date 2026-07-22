@@ -35,8 +35,12 @@ export function LoadingState({
 }) {
   return (
     <div className="state-panel" role="status" aria-live="polite">
-      <span className="spinner" aria-hidden="true" />
-      <p>{label}…</p>
+      <div className="loading-skeleton" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <p className="muted">{label}…</p>
     </div>
   );
 }
@@ -59,7 +63,10 @@ export function ErrorState(props: {
 export function EmptyState(props: { title: string; detail: string }) {
   return (
     <div className="state-panel">
-      <p className="state-title">{props.title}</p>
+      <span className="state-kicker" aria-hidden="true">
+        —
+      </span>
+      <h2 className="state-title">{props.title}</h2>
       <p>{props.detail}</p>
     </div>
   );
@@ -98,7 +105,7 @@ export function LocalTime({ value }: { value: string | null }) {
 export function TokenNumber(props: { value: string; available?: boolean }) {
   const available = props.available ?? true;
   return (
-    <span title={available ? props.value : undefined}>
+    <span className="numeric" title={available ? props.value : undefined}>
       {formatToken(props.value, available)}
     </span>
   );

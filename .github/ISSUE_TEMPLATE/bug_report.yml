@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible AgentLedger defect with synthetic data only.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy first:** do not upload real Codex/Claude JSONL, an AgentLedger database, Prompt/response text, source code, tokens, cookies, API keys, or other credentials. Create a synthetic redacted fixture. You may include `doctor --json` only after reviewing every path and field.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the behavior and expected result without sensitive data.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Synthetic reproduction
+      description: Give minimal commands and, if needed, a fully artificial fixture.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AgentLedger version
+      placeholder: 0.1.0-alpha.1
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Node.js version
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I did not attach real logs, a database, Prompt/response text, source code, tokens, cookies, API keys, or credentials.
+          required: true
+        - label: I reviewed all diagnostic output and paths before sharing.
+          required: true

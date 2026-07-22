@@ -151,22 +151,30 @@ export default function TestRunsPage() {
         />
       ) : (
         <>
-          <div className="table-scroll panel">
+          <div
+            className="table-scroll panel"
+            role="region"
+            aria-label="Test runs table"
+            tabIndex={0}
+          >
             <table>
+              <caption className="sr-only">
+                Recorded aggregate test run metadata
+              </caption>
               <thead>
                 <tr>
-                  <th>Time / ID</th>
-                  <th>Stage</th>
-                  <th>Framework</th>
-                  <th>Outcome</th>
-                  <th>Passed</th>
-                  <th>Failed</th>
-                  <th>Skipped</th>
-                  <th>Duration</th>
-                  <th>Parser</th>
-                  <th>Tracking</th>
-                  <th>Session</th>
-                  <th>Output</th>
+                  <th scope="col">Time / ID</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Framework</th>
+                  <th scope="col">Outcome</th>
+                  <th scope="col">Passed</th>
+                  <th scope="col">Failed</th>
+                  <th scope="col">Skipped</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Parser</th>
+                  <th scope="col">Tracking</th>
+                  <th scope="col">Session</th>
+                  <th scope="col">Output</th>
                 </tr>
               </thead>
               <tbody>

@@ -7,7 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { NavLink, Route, Routes } from "react-router";
+import { NavLink, Route, Routes, useLocation } from "react-router";
 
 import { LoadingState } from "./components.js";
 
@@ -45,6 +45,32 @@ function initialTheme(): ThemePreference {
   return stored === "light" || stored === "dark" ? stored : "system";
 }
 
+function RouteTitle() {
+  const location = useLocation();
+  useEffect(() => {
+    const label =
+      location.pathname === "/"
+        ? "Overview"
+        : location.pathname.startsWith("/sessions/")
+          ? "Session detail"
+          : location.pathname === "/sessions"
+            ? "Sessions"
+            : location.pathname.startsWith("/tracking-runs/")
+              ? "Tracking detail"
+              : location.pathname === "/tracking-runs"
+                ? "Tracking runs"
+                : location.pathname.startsWith("/test-runs/")
+                  ? "Test detail"
+                  : location.pathname === "/test-runs"
+                    ? "Test runs"
+                    : location.pathname === "/diagnostics"
+                      ? "Diagnostics"
+                      : "Page not found";
+    document.title = `${label} · AgentLedger`;
+  }, [location.pathname]);
+  return null;
+}
+
 export default function App() {
   const [theme, setTheme] = useState<ThemePreference>(initialTheme);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -70,12 +96,13 @@ export default function App() {
   );
   return (
     <DashboardContext.Provider value={context}>
+      <RouteTitle />
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
       <div className="app-shell">
         <aside className="sidebar">
-          <div className="brand">
+          <div className="brand" aria-label="AgentLedger local dashboard">
             <span className="brand-mark" aria-hidden="true">
               AL
             </span>
@@ -100,9 +127,7 @@ export default function App() {
         </aside>
         <div className="content-shell">
           <header className="topbar">
-            <p>
-              Observed session activity — no prompts, source, or raw test output
-            </p>
+            <p>Local usage, observed changes, and recorded tests</p>
             <div className="topbar-actions">
               <label>
                 <span className="sr-only">Automatic refresh interval</span>
@@ -122,7 +147,7 @@ export default function App() {
                 onClick={() => setTheme((value) => nextTheme(value))}
                 aria-label={`Theme: ${theme}. Activate to change theme.`}
               >
-                Theme: {theme}
+                Theme · {theme}
               </button>
             </div>
           </header>
@@ -142,7 +167,18 @@ export default function App() {
                 <Route path="/test-runs" element={<TestRunsPage />} />
                 <Route path="/test-runs/:id" element={<TestDetailPage />} />
                 <Route path="/diagnostics" element={<DiagnosticsPage />} />
-                <Route path="*" element={<p>Page not found.</p>} />
+                <Route
+                  path="*"
+                  element={
+                    <section className="state-panel">
+                      <p className="eyebrow">404</p>
+                      <h1>Page not found</h1>
+                      <p className="muted">
+                        This local dashboard route does not exist.
+                      </p>
+                    </section>
+                  }
+                />
               </Routes>
             </Suspense>
           </main>

@@ -1,33 +1,41 @@
 # AgentLedger
 
-> **Dashboard screenshot:** intentionally not included in Phase 4A. The local
-> Dashboard is implemented and tested, but no fabricated placeholder image is
-> committed. A real capture can be added during Phase 4B packaging.
+Local-first session accounting and review for Claude Code and OpenAI Codex.
 
-AgentLedger is a local-first tool that imports Claude Code and OpenAI Codex
-session metadata into SQLite, reports token usage, and records local Git changes
-observed during an AI coding session. It also records explicitly wrapped local
-test runs and imported aggregate test reports. A read-only React Dashboard shows
-the same local metadata through a loopback-only API. AgentLedger reads JSONL logs
-incrementally, keeps Provider and test parsers independent, and stores only
-accounting, Git, and aggregate test metadata.
+![AgentLedger local Dashboard overview with synthetic Demo data](docs/assets/dashboard-overview-light.png)
 
-The Dashboard is a local web UI, not a desktop app or remote service. There is no
-VS Code plugin, cloud sync, telemetry, account system, or network pricing lookup
-in the current phase.
+- **Local-first:** SQLite stays on your machine; there is no telemetry.
+- **Two Providers:** independent Claude Code and Codex log adapters.
+- **Canonical Token accounting:** incremental, auditable, and cache-safe.
+- **Observed Git changes:** interval metadata without full diffs or source bodies.
+- **Recorded test results:** explicit aggregate runs and comparisons.
+- **Read-only local Dashboard:** loopback-only API with a per-start token.
 
-AgentLedger uses this wording:
+> **Alpha — 0.1.0-alpha.1 is not published yet.** Build from a trusted checkout
+> or create the verified local tarball. Log formats and metadata contracts may
+> change.
 
-> **Changes observed during an AI coding session**
+## Quick start
 
-It does not claim exact AI authorship.
+```sh
+pnpm install --frozen-lockfile
+pnpm build
+pnpm cli doctor
+pnpm cli import --provider all
+pnpm cli dashboard
+```
 
-For tests, AgentLedger uses this wording:
+AgentLedger saves accounting, repository, observed Git, and aggregate test
+metadata. It does not save Prompt/response bodies, source code, complete diffs,
+raw test output, environment variables, or credentials. The Dashboard is a
+local web UI—not a desktop app or remote service—and must not be exposed through
+a proxy or port forward. See [Privacy](PRIVACY.md).
 
-> **Test results recorded during an AI coding session**
-
-A recorded passing test is not proof that code is correct, and a changed result
-is not attributed causally to a Provider.
+Current limits: macOS and Linux are the validated targets; pricing is a bundled
+versioned estimate and unknown models remain unavailable; Provider log formats
+may evolve; Git/test associations describe timing and repository context, never
+exact AI authorship. There is no cloud sync, account system, VS Code plugin,
+remote Dashboard, or productivity score.
 
 ## Requirements
 
@@ -246,6 +254,11 @@ recovery semantics. See [Test tracking](docs/test-tracking.md) for wrapper,
 report, comparison, privacy, recovery, and deletion semantics. See
 [Local Dashboard](docs/dashboard.md) for the read-only UI and API boundary. See
 [Architecture](docs/architecture.md) for module boundaries.
+
+For setup and project participation, see [Installation](docs/installation.md),
+[Troubleshooting](docs/troubleshooting.md), [Accessibility](docs/accessibility.md),
+[Redaction](docs/redaction-guide.md), [Contributing](CONTRIBUTING.md),
+[Security](SECURITY.md), [Privacy](PRIVACY.md), and the [Changelog](CHANGELOG.md).
 
 ## Test tracking limits
 
