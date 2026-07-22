@@ -5,7 +5,7 @@ import type {
   TestFramework,
   TestOutcome,
   TestParserStatus,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 export const TEST_OUTPUT_PARSER_VERSION = "test-output-v1";
 

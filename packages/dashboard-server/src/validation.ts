@@ -5,7 +5,7 @@ import type {
   TestParserStatus,
   TestStage,
   TrackingRunStatus,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import type {
   SessionPageQuery,

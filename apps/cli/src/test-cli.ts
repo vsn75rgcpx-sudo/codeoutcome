@@ -6,13 +6,13 @@ import {
   compareTrackingRunTests,
   importTestReport,
   manualLinkTestRun,
-  readAgentLedgerConfig,
+  readCodeOutcomeConfig,
   runTestCommand,
   unlinkTestRun,
   type TestProcessRunner,
   type TestReportFormat,
-} from "@agentledger/core";
-import { SessionDatabase } from "@agentledger/database";
+} from "@codeoutcome/core";
+import { SessionDatabase } from "@codeoutcome/database";
 import {
   redactHomePath,
   type TestComparison,
@@ -20,7 +20,7 @@ import {
   type TestOutcome,
   type TestRun,
   type TestStage,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 export interface TestCliContext {
   io: { stdout(message: string): void; stderr(message: string): void };
@@ -246,7 +246,7 @@ async function runWrappedCommand(
   if (parsed.positional.length > 0)
     throw new Error("Unexpected test run argument before `--`");
   const json = parsed.booleans.has("--json");
-  const config = await readAgentLedgerConfig(context.dataDirectory);
+  const config = await readCodeOutcomeConfig(context.dataDirectory);
   return withDatabase(context.databaseFile, async (database) => {
     const result = await runTestCommand({
       database,
@@ -269,7 +269,7 @@ async function runWrappedCommand(
             ? error.message.split("\n")[0]
             : "unknown error";
         context.io.stderr(
-          `WARN: Test exited, but AgentLedger finalization failed: ${message?.split(context.userHome).join("~")}`,
+          `WARN: Test exited, but CodeOutcome finalization failed: ${message?.split(context.userHome).join("~")}`,
         );
       },
     });
@@ -298,7 +298,7 @@ async function runImport(
   if (sourceFile === undefined || parsed.positional.length > 1) {
     throw new Error("test import requires --file <path> or one report path");
   }
-  const config = await readAgentLedgerConfig(context.dataDirectory);
+  const config = await readCodeOutcomeConfig(context.dataDirectory);
   return withDatabase(context.databaseFile, async (database) => {
     const result = await importTestReport({
       database,
@@ -638,15 +638,15 @@ export async function runTestCli(
   return null;
 }
 
-export const TEST_HELP = `  agentledger test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
-  agentledger test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
-  agentledger test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
-  agentledger test show <test-run-id> [--json]
-  agentledger test compare <baseline-id> <final-id> [--json]
-  agentledger test compare --tracking-run <id> [--json]
-  agentledger test compare --session <id> [--json]
-  agentledger test link <test-run-id> [--tracking-run id] [--session id] [--json]
-  agentledger test unlink <test-run-id> [--json]
-  agentledger test recover <test-run-id>|--list [--json]
-  agentledger test abandon <test-run-id> [--json]
-  agentledger data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]`;
+export const TEST_HELP = `  codeoutcome test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
+  codeoutcome test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
+  codeoutcome test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
+  codeoutcome test show <test-run-id> [--json]
+  codeoutcome test compare <baseline-id> <final-id> [--json]
+  codeoutcome test compare --tracking-run <id> [--json]
+  codeoutcome test compare --session <id> [--json]
+  codeoutcome test link <test-run-id> [--tracking-run id] [--session id] [--json]
+  codeoutcome test unlink <test-run-id> [--json]
+  codeoutcome test recover <test-run-id>|--list [--json]
+  codeoutcome test abandon <test-run-id> [--json]
+  codeoutcome data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]`;

@@ -4,7 +4,7 @@ import { Link } from "react-router";
 import type {
   DashboardDistribution,
   DashboardPagination,
-} from "@agentledger/shared/dashboard";
+} from "@codeoutcome/shared/dashboard";
 
 import { formatDate, formatToken } from "./format.js";
 

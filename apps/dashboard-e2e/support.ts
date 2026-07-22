@@ -8,7 +8,7 @@ import {
   startDashboardServer,
   type RunningDashboardServer,
 } from "../../packages/dashboard-server/src/index.js";
-import { AGENTLEDGER_VERSION } from "../../packages/shared/src/index.js";
+import { CODEOUTCOME_VERSION } from "../../packages/shared/src/index.js";
 import { DEMO_NOW, seedDemoDatabase } from "../../scripts/demo-data.js";
 
 export type DashboardFixtureKind = "demo" | "empty" | "missing" | "outdated";
@@ -28,8 +28,8 @@ export async function createDashboardRuntime(
   } = {},
 ): Promise<DashboardRuntime> {
   const kind = options.kind ?? "demo";
-  const directory = await mkdtemp(path.join(tmpdir(), "agentledger-e2e-"));
-  const databaseFile = path.join(directory, "agentledger.sqlite");
+  const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-e2e-"));
+  const databaseFile = path.join(directory, "codeoutcome.sqlite");
   try {
     if (kind === "demo") {
       seedDemoDatabase(databaseFile);
@@ -48,7 +48,7 @@ export async function createDashboardRuntime(
       userHome: path.join(directory, "synthetic-home"),
       claudeLogDirectory: path.join(directory, "synthetic-claude-logs"),
       codexLogDirectory: path.join(directory, "synthetic-codex-logs"),
-      version: AGENTLEDGER_VERSION,
+      version: CODEOUTCOME_VERSION,
       staticRoot: path.resolve("apps/dashboard/dist"),
       host: "127.0.0.1",
       port: 0,

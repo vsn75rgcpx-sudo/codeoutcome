@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import type {
   DashboardFilters,
   DashboardSessionListItem,
-} from "@agentledger/shared/dashboard";
+} from "@codeoutcome/shared/dashboard";
 
 import { queryString, useApi } from "../api.js";
 import { useDashboard } from "../app.js";

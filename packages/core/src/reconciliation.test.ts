@@ -4,12 +4,12 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SessionDatabase } from "@agentledger/database";
+import { SessionDatabase } from "@codeoutcome/database";
 import {
   stableSessionId,
   type Session,
   type UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import { reconcileUsage } from "./reconciliation.js";
 
@@ -28,7 +28,7 @@ async function databaseFixture(): Promise<{
   sessionId: string;
 }> {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-reconcile-"),
+    path.join(tmpdir(), "codeoutcome-reconcile-"),
   );
   temporaryDirectories.push(directory);
   const database = new SessionDatabase(path.join(directory, "test.sqlite"));

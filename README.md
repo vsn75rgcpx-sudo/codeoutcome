@@ -1,8 +1,10 @@
-# AgentLedger
+# CodeOutcome
 
 Local-first session accounting and review for Claude Code and OpenAI Codex.
 
-![AgentLedger local Dashboard overview with synthetic Demo data](docs/assets/dashboard-overview-light.png)
+[![CI](https://github.com/vsn75rgcpx-sudo/codeoutcome/actions/workflows/ci.yml/badge.svg)](https://github.com/vsn75rgcpx-sudo/codeoutcome/actions/workflows/ci.yml)
+
+![CodeOutcome local Dashboard overview with synthetic Demo data](docs/assets/dashboard-overview-light.png)
 
 - **Local-first:** SQLite stays on your machine; there is no telemetry.
 - **Two Providers:** independent Claude Code and Codex log adapters.
@@ -11,9 +13,9 @@ Local-first session accounting and review for Claude Code and OpenAI Codex.
 - **Recorded test results:** explicit aggregate runs and comparisons.
 - **Read-only local Dashboard:** loopback-only API with a per-start token.
 
-> **Alpha — 0.1.0-alpha.1 is not published yet.** Build from a trusted checkout
-> or create the verified local tarball. Log formats and metadata contracts may
-> change.
+> **Source alpha — 0.1.0-alpha.1.** Build from a trusted checkout or install the
+> checksum-verified GitHub Release tarball locally. The package is not published
+> to npm. Log formats and metadata contracts may change.
 
 ## Quick start
 
@@ -25,7 +27,7 @@ pnpm cli import --provider all
 pnpm cli dashboard
 ```
 
-AgentLedger saves accounting, repository, observed Git, and aggregate test
+CodeOutcome saves accounting, repository, observed Git, and aggregate test
 metadata. It does not save Prompt/response bodies, source code, complete diffs,
 raw test output, environment variables, or credentials. The Dashboard is a
 local web UI—not a desktop app or remote service—and must not be exposed through
@@ -76,41 +78,41 @@ pnpm cli dashboard
 ```
 
 After `pnpm build`, the executable is `apps/cli/dist/index.js`. A linked or
-published package exposes the same program as `agentledger`.
+published package exposes the same program as `codeoutcome`.
 
 ## Commands
 
 ```text
-agentledger doctor [--json]
-agentledger import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
-agentledger audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
-agentledger reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
-agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
-agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
-agentledger git snapshot|status [--json]
-agentledger git show <snapshot-id> [--json]
-agentledger track start [--provider codex|claude-code] [--label text] [--json]
-agentledger track stop [tracking-run-id] [--json]
-agentledger track status|list|show
-agentledger track link <tracking-run-id> --session <session-id>
-agentledger track unlink <tracking-run-id>
-agentledger track recover [tracking-run-id|--list]
-agentledger track abandon <tracking-run-id>
-agentledger run codex [-- <codex arguments>]
-agentledger config set privacy git-metadata|strict
-agentledger test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
-agentledger test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
-agentledger test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
-agentledger test show <test-run-id> [--json]
-agentledger test compare <baseline-id> <final-id> [--json]
-agentledger test compare --tracking-run <id> [--json]
-agentledger test compare --session <id> [--json]
-agentledger test link <test-run-id> [--tracking-run id] [--session id]
-agentledger test unlink <test-run-id>
-agentledger test recover <test-run-id>|--list
-agentledger test abandon <test-run-id>
-agentledger data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]
-agentledger dashboard [--no-open] [--port 4567] [--host 127.0.0.1] [--json]
+codeoutcome doctor [--json]
+codeoutcome import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
+codeoutcome audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
+codeoutcome reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
+codeoutcome sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
+codeoutcome usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
+codeoutcome git snapshot|status [--json]
+codeoutcome git show <snapshot-id> [--json]
+codeoutcome track start [--provider codex|claude-code] [--label text] [--json]
+codeoutcome track stop [tracking-run-id] [--json]
+codeoutcome track status|list|show
+codeoutcome track link <tracking-run-id> --session <session-id>
+codeoutcome track unlink <tracking-run-id>
+codeoutcome track recover [tracking-run-id|--list]
+codeoutcome track abandon <tracking-run-id>
+codeoutcome run codex [-- <codex arguments>]
+codeoutcome config set privacy git-metadata|strict
+codeoutcome test run [--stage baseline|intermediate|final] [--framework auto|pytest|jest|vitest|go|cargo|generic] [--json] -- <executable> [args...]
+codeoutcome test import --file <report> [--format auto|junit|pytest-json|jest-json|vitest-json] [--tracking-run id] [--session id] [--stage baseline|intermediate|final] [--json]
+codeoutcome test list [--since 7d] [--framework name] [--tracking-run id] [--session id] [--outcome name] [--limit 20] [--json]
+codeoutcome test show <test-run-id> [--json]
+codeoutcome test compare <baseline-id> <final-id> [--json]
+codeoutcome test compare --tracking-run <id> [--json]
+codeoutcome test compare --session <id> [--json]
+codeoutcome test link <test-run-id> [--tracking-run id] [--session id]
+codeoutcome test unlink <test-run-id>
+codeoutcome test recover <test-run-id>|--list
+codeoutcome test abandon <test-run-id>
+codeoutcome data delete-tests [--before date] [--tracking-run id] [--dry-run|--yes] [--json]
+codeoutcome dashboard [--no-open] [--port 4567] [--host 127.0.0.1] [--json]
 ```
 
 `doctor` is diagnostic only: it does not create the database, run migrations,
@@ -122,7 +124,7 @@ its `--dry-run` mode does not change accounting rows. `sessions` and `usage`
 query the persisted database. `track start` and `track stop` capture Git metadata
 without changing the working tree. `run codex` wraps the local Codex executable
 with the same lifecycle, forwards arguments without a shell, and returns Codex's
-exit code. It passes the tracking ID through `AGENTLEDGER_TRACKING_RUN_ID` when
+exit code. It passes the tracking ID through `CODEOUTCOME_TRACKING_RUN_ID` when
 that value is not already present.
 
 `test run` executes the requested executable and argument array with
@@ -136,18 +138,36 @@ Default paths:
 
 - Claude Code logs: `~/.claude/projects`
 - Codex logs: `~/.codex/sessions`
-- macOS database: `~/Library/Application Support/AgentLedger/agentledger.sqlite`
-- Linux database: `$XDG_DATA_HOME/agentledger/agentledger.sqlite`, or
-  `~/.local/share/agentledger/agentledger.sqlite`
+- macOS database: `~/Library/Application Support/CodeOutcome/codeoutcome.sqlite`
+- Linux database: `$XDG_DATA_HOME/codeoutcome/codeoutcome.sqlite`, or
+  `~/.local/share/codeoutcome/codeoutcome.sqlite`
 - Local configuration: `config.json` beside the database
 
 Path overrides:
 
 ```sh
-AGENTLEDGER_CLAUDE_LOG_DIR=/path/to/claude/logs pnpm cli import
-AGENTLEDGER_CODEX_LOG_DIR=/path/to/codex/logs pnpm cli import
-AGENTLEDGER_DATA_DIR=/path/to/local/data pnpm cli import
+CODEOUTCOME_CLAUDE_LOG_DIR=/path/to/claude/logs pnpm cli import
+CODEOUTCOME_CODEX_LOG_DIR=/path/to/codex/logs pnpm cli import
+CODEOUTCOME_DATA_DIR=/path/to/local/data pnpm cli import
 ```
+
+### Legacy AgentLedger data
+
+The pre-release project name used
+`~/Library/Application Support/AgentLedger/agentledger.sqlite` on macOS (and an
+`agentledger` XDG data directory on Linux). CodeOutcome never moves or renames
+that database automatically. If the new CodeOutcome data directory does not
+exist and the legacy database does, the CLI uses the legacy location in
+compatibility mode and prints a warning. A new CodeOutcome database always
+takes precedence.
+
+The former `AGENTLEDGER_DATA_DIR`, `AGENTLEDGER_CLAUDE_LOG_DIR`,
+`AGENTLEDGER_CODEX_LOG_DIR`, and `AGENTLEDGER_TRACKING_RUN_ID` names remain
+temporarily readable with a deprecation warning. Prefer their `CODEOUTCOME_*`
+replacements. An explicit migration command is intentionally deferred until its
+backup and conflict workflow can receive dedicated testing; for now, keep the
+legacy database in place or copy it manually only after stopping all processes
+and creating a verified backup.
 
 Durations such as `7d`, `24h`, and `4w` are supported by `--since`. Date
 filtering and report buckets use UTC.
@@ -176,7 +196,7 @@ states, refresh behavior, and troubleshooting.
 
 ## Privacy principles
 
-- Source logs are opened read-only. AgentLedger never edits, moves, truncates,
+- Source logs are opened read-only. CodeOutcome never edits, moves, truncates,
   or deletes files under `~/.claude`, `~/.codex`, or configured log roots.
 - Prompt text, response text, source code, tool payloads, shell environment
   variables, API keys, cookies, and access tokens are not placed in normalized
@@ -209,9 +229,9 @@ The SQLite database is private local data and may still reveal project names,
 paths, models, branches, timestamps, token counts, executable names, and test
 aggregates. Protect it accordingly.
 Changing to `strict` does not silently erase older metadata. To delete local
-history, first stop AgentLedger processes and make any desired backup, then
-manually remove `agentledger.sqlite` (including its `-wal`/`-shm` companions)
-and `config.json` from the local data directory. AgentLedger never performs this
+history, first stop CodeOutcome processes and make any desired backup, then
+manually remove `codeoutcome.sqlite` (including its `-wal`/`-shm` companions)
+and `config.json` from the local data directory. CodeOutcome never performs this
 deletion automatically.
 
 ## Current format support
@@ -260,11 +280,13 @@ For setup and project participation, see [Installation](docs/installation.md),
 [Redaction](docs/redaction-guide.md), [Contributing](CONTRIBUTING.md),
 [Security](SECURITY.md), [Privacy](PRIVACY.md), and the [Changelog](CHANGELOG.md).
 
+Repository: [github.com/vsn75rgcpx-sudo/codeoutcome](https://github.com/vsn75rgcpx-sudo/codeoutcome)
+
 ## Test tracking limits
 
-AgentLedger cannot transparently intercept every command that Claude Code or
-Codex runs. Only commands invoked through `agentledger test run` and reports
-provided to `agentledger test import` are recorded. Tracking-run and session
+CodeOutcome cannot transparently intercept every command that Claude Code or
+Codex runs. Only commands invoked through `codeoutcome test run` and reports
+provided to `codeoutcome test import` are recorded. Tracking-run and session
 links establish timing and repository context; they do not prove authorship or
 causality. Output formats can change, so unrecognized summaries safely fall back
 to exit-code-only records with unknown counts.

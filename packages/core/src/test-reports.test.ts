@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { SessionDatabase } from "@agentledger/database";
+import { SessionDatabase } from "@codeoutcome/database";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -15,7 +15,7 @@ const temporaryDirectories: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-test-report-"),
+    path.join(tmpdir(), "codeoutcome-test-report-"),
   );
   temporaryDirectories.push(directory);
   return directory;
@@ -111,7 +111,7 @@ describe("test report parsing", () => {
     const directory = await temporaryDirectory();
     const sourceFile = path.join(directory, "junit.xml");
     const database = new SessionDatabase(
-      path.join(directory, "agentledger.sqlite"),
+      path.join(directory, "codeoutcome.sqlite"),
     );
     await writeFile(
       sourceFile,
@@ -163,7 +163,7 @@ describe("test report parsing", () => {
     const sourceFile = path.join(directory, "large.json");
     await writeFile(sourceFile, "12345");
     const database = new SessionDatabase(
-      path.join(directory, "agentledger.sqlite"),
+      path.join(directory, "codeoutcome.sqlite"),
     );
     await expect(
       importTestReport({
@@ -187,7 +187,7 @@ describe("test report parsing", () => {
       }),
     );
     const database = new SessionDatabase(
-      path.join(directory, "agentledger.sqlite"),
+      path.join(directory, "codeoutcome.sqlite"),
     );
     const result = await importTestReport({
       database,

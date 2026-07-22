@@ -1,4 +1,4 @@
-import type { Provider, Session, UsageEvent } from "@agentledger/shared";
+import type { Provider, Session, UsageEvent } from "@codeoutcome/shared";
 
 import { analyzeUsageEvents } from "./accounting.js";
 import { DEFAULT_PRICING_CATALOG, type PricingCatalog } from "./pricing.js";

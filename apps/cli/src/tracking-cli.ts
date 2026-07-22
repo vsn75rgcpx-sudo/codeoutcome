@@ -3,7 +3,7 @@ import {
   buildTrackingTestSummary,
   captureManualSnapshot,
   manualLinkTrackingRun,
-  readAgentLedgerConfig,
+  readCodeOutcomeConfig,
   runImport,
   runTrackedProvider,
   setPrivacyMode,
@@ -13,13 +13,13 @@ import {
   trackingDuration,
   unlinkTrackingRun,
   type ProviderProcessRunner,
-} from "@agentledger/core";
-import { SessionDatabase } from "@agentledger/database";
+} from "@codeoutcome/core";
+import { SessionDatabase } from "@codeoutcome/database";
 import {
   captureGitSnapshot,
   NotGitRepositoryError,
   type GitProcessRunner,
-} from "@agentledger/git-tracker";
+} from "@codeoutcome/git-tracker";
 import {
   canonicalizePath,
   redactHomePath,
@@ -28,7 +28,7 @@ import {
   type SessionAdapter,
   type TrackingRun,
   type TestRun,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 export interface TrackingCliIo {
   stdout(message: string): void;
@@ -278,7 +278,7 @@ async function runGitCommand(
   if (parsed.positional.length > (subcommand === "show" ? 1 : 0)) {
     throw new Error("Unexpected Git command argument");
   }
-  const config = await readAgentLedgerConfig(context.dataDirectory);
+  const config = await readCodeOutcomeConfig(context.dataDirectory);
   if (subcommand === "status") {
     const draft = await captureGitSnapshot({
       workingDirectory: context.workingDirectory,
@@ -339,7 +339,7 @@ async function runTrackCommand(
           : [],
     subcommand === "recover" ? ["--json", "--list"] : ["--json"],
   );
-  const config = await readAgentLedgerConfig(context.dataDirectory);
+  const config = await readCodeOutcomeConfig(context.dataDirectory);
   return withDatabase(context.databaseFile, async (database) => {
     const importLatest = async (selectedProvider: Provider): Promise<void> => {
       await runImport({
@@ -553,11 +553,11 @@ async function runCodex(
     },
     startTracking: async () => {
       await withDatabase(context.databaseFile, async (database) => {
-        const config = await readAgentLedgerConfig(context.dataDirectory);
+        const config = await readCodeOutcomeConfig(context.dataDirectory);
         const run = await startTracking({
           database,
           provider: "codex",
-          label: "agentledger run codex",
+          label: "codeoutcome run codex",
           workingDirectory: context.workingDirectory,
           privacyMode: config.privacy,
           now: context.now,
@@ -570,7 +570,7 @@ async function runCodex(
       const runId = trackingRunId;
       if (runId === null) return;
       await withDatabase(context.databaseFile, async (database) => {
-        const config = await readAgentLedgerConfig(context.dataDirectory);
+        const config = await readCodeOutcomeConfig(context.dataDirectory);
         await stopTracking({
           database,
           trackingRunId: runId,
@@ -624,7 +624,7 @@ export async function runPhase3Cli(
   if (command === "config") {
     if (subcommand !== "set" || rest[0] !== "privacy") {
       throw new Error(
-        "Use: agentledger config set privacy git-metadata|strict",
+        "Use: codeoutcome config set privacy git-metadata|strict",
       );
     }
     const mode = rest[1];
@@ -637,24 +637,24 @@ export async function runPhase3Cli(
   }
   if (command === "run") {
     if (subcommand !== "codex")
-      throw new Error("Only `agentledger run codex` is supported");
+      throw new Error("Only `codeoutcome run codex` is supported");
     return runCodex(rest, context);
   }
   return null;
 }
 
 export const PHASE3_HELP = `
-  agentledger git snapshot [--json]
-  agentledger git status [--json]
-  agentledger git show <snapshot-id> [--json]
-  agentledger track start [--provider codex|claude-code] [--label text] [--json]
-  agentledger track stop [tracking-run-id] [--json]
-  agentledger track status [--json]
-  agentledger track list [--since 7d] [--json]
-  agentledger track show <tracking-run-id> [--json]
-  agentledger track link <tracking-run-id> --session <session-id> [--json]
-  agentledger track unlink <tracking-run-id> [--json]
-  agentledger track recover [tracking-run-id|--list] [--json]
-  agentledger track abandon <tracking-run-id> [--json]
-  agentledger run codex [-- <codex arguments>]
-  agentledger config set privacy git-metadata|strict`;
+  codeoutcome git snapshot [--json]
+  codeoutcome git status [--json]
+  codeoutcome git show <snapshot-id> [--json]
+  codeoutcome track start [--provider codex|claude-code] [--label text] [--json]
+  codeoutcome track stop [tracking-run-id] [--json]
+  codeoutcome track status [--json]
+  codeoutcome track list [--since 7d] [--json]
+  codeoutcome track show <tracking-run-id> [--json]
+  codeoutcome track link <tracking-run-id> --session <session-id> [--json]
+  codeoutcome track unlink <tracking-run-id> [--json]
+  codeoutcome track recover [tracking-run-id|--list] [--json]
+  codeoutcome track abandon <tracking-run-id> [--json]
+  codeoutcome run codex [-- <codex arguments>]
+  codeoutcome config set privacy git-metadata|strict`;

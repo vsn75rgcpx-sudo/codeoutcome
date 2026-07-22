@@ -19,7 +19,7 @@ async function capture(
   theme: "light" | "dark",
 ): Promise<void> {
   await page.addInitScript((selectedTheme) => {
-    localStorage.setItem("agentledger-theme", selectedTheme);
+    localStorage.setItem("codeoutcome-theme", selectedTheme);
   }, theme);
   await page.goto(url);
   await settle(page);

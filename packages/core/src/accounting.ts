@@ -3,7 +3,7 @@ import type {
   AccountingStatus,
   Provider,
   UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   DEFAULT_PRICING_CATALOG,
@@ -11,7 +11,7 @@ import {
   type PricingCatalog,
 } from "./pricing.js";
 
-export const ACCOUNTING_VERSION = "agentledger-accounting-v2.5.0";
+export const ACCOUNTING_VERSION = "codeoutcome-accounting-v2.5.0";
 
 export interface UsageAccountingAnalysis {
   accountingMethod: AccountingMethod;

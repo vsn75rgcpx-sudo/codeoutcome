@@ -5,11 +5,11 @@ import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CodexAdapter } from "@agentledger/adapter-codex";
+import { CodexAdapter } from "@codeoutcome/adapter-codex";
 import {
   REPARSE_REQUIRED_CHECKPOINT,
   SessionDatabase,
-} from "@agentledger/database";
+} from "@codeoutcome/database";
 
 import { runImport } from "./importer.js";
 
@@ -74,7 +74,7 @@ async function fixture(): Promise<{
   sourceFile: string;
 }> {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-codex-import-"),
+    path.join(tmpdir(), "codeoutcome-codex-import-"),
   );
   temporaryDirectories.push(directory);
   const logs = path.join(directory, "logs");

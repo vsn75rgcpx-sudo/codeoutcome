@@ -1,4 +1,4 @@
-import type { DashboardDiagnostics } from "@agentledger/shared/dashboard";
+import type { DashboardDiagnostics } from "@codeoutcome/shared/dashboard";
 
 import { useApi } from "../api.js";
 import { useDashboard } from "../app.js";
@@ -59,7 +59,7 @@ export default function DiagnosticsPage() {
             <dd>{diagnostics.database.quickCheck ?? "unavailable"}</dd>
             <dt>Privacy mode</dt>
             <dd>{diagnostics.privacyMode}</dd>
-            <dt>AgentLedger</dt>
+            <dt>CodeOutcome</dt>
             <dd>{diagnostics.version}</dd>
           </dl>
         </section>

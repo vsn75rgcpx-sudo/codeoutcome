@@ -8,7 +8,7 @@ import {
   type DashboardErrorEnvelope,
   type DashboardMeta,
   type DashboardRange,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 import { Hono, type Context } from "hono";
 
 import { DashboardDataError, type DashboardStore } from "./store.js";
@@ -41,13 +41,13 @@ function hasTraversal(url: string): boolean {
 }
 
 function secureIndex(indexHtml: string, token: string): string {
-  if (!indexHtml.includes("__AGENTLEDGER_DASHBOARD_TOKEN__")) {
+  if (!indexHtml.includes("__CODEOUTCOME_DASHBOARD_TOKEN__")) {
     throw new Error("Dashboard index is missing the access-token placeholder");
   }
   if (!/^[A-Za-z0-9_-]+$/.test(token)) {
     throw new Error("Dashboard access token is not safe for HTML injection");
   }
-  return indexHtml.replaceAll("__AGENTLEDGER_DASHBOARD_TOKEN__", token);
+  return indexHtml.replaceAll("__CODEOUTCOME_DASHBOARD_TOKEN__", token);
 }
 
 export function createDashboardApp(options: DashboardAppOptions): Hono {

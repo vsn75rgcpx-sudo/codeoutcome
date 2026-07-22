@@ -1,10 +1,10 @@
-import type { SessionDatabase } from "@agentledger/database";
+import type { SessionDatabase } from "@codeoutcome/database";
 import type {
   TestComparison,
   TestRun,
   TrackingRun,
   TrackingTestSummary,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 function delta(left: number | null, right: number | null): number | null {
   return left === null || right === null ? null : right - left;

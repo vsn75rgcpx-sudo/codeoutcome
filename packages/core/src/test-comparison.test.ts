@@ -1,4 +1,4 @@
-import type { TestRun, TrackingRun } from "@agentledger/shared";
+import type { TestRun, TrackingRun } from "@codeoutcome/shared";
 import { describe, expect, it } from "vitest";
 
 import {

@@ -4,13 +4,13 @@ import {
   DASHBOARD_TOKEN_HEADER,
   type DashboardEnvelope,
   type DashboardErrorEnvelope,
-} from "@agentledger/shared/dashboard";
+} from "@codeoutcome/shared/dashboard";
 
 function dashboardToken(): string {
   return (
     document
       .querySelector<HTMLMetaElement>(
-        'meta[name="agentledger-dashboard-token"]',
+        'meta[name="codeoutcome-dashboard-token"]',
       )
       ?.getAttribute("content") ?? ""
   );

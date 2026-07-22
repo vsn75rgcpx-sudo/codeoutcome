@@ -1,4 +1,4 @@
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,10 +10,11 @@ import {
   type Provider,
   type Session,
   type UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   backupDatabase,
+  getCodeOutcomePaths,
   inspectDatabase,
   LATEST_MIGRATION_VERSION,
   SessionDatabase,
@@ -35,7 +36,7 @@ async function temporaryDatabase(): Promise<{
   databaseFile: string;
   database: SessionDatabase;
 }> {
-  const directory = await mkdtemp(path.join(tmpdir(), "agentledger-db-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-db-"));
   temporaryDirectories.push(directory);
   const databaseFile = path.join(directory, "session.sqlite");
   return {
@@ -296,7 +297,7 @@ describe("SessionDatabase migrations and queries", () => {
 
 describe("legacy migration", () => {
   it("preserves phase-one session metadata", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-legacy-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-legacy-"));
     temporaryDirectories.push(directory);
     const databaseFile = path.join(directory, "legacy.sqlite");
     const legacy = new DatabaseSync(databaseFile);
@@ -324,5 +325,76 @@ describe("legacy migration", () => {
     });
     expect(database.migrationVersion()).toBe(LATEST_MIGRATION_VERSION);
     database.close();
+  });
+});
+
+describe("CodeOutcome data path compatibility", () => {
+  it("uses the new macOS data location for a new installation", async () => {
+    const userHome = await mkdtemp(path.join(tmpdir(), "codeoutcome-home-"));
+    temporaryDirectories.push(userHome);
+
+    expect(getCodeOutcomePaths({}, userHome, "darwin")).toEqual({
+      dataDirectory: path.join(
+        userHome,
+        "Library",
+        "Application Support",
+        "CodeOutcome",
+      ),
+      databaseFile: path.join(
+        userHome,
+        "Library",
+        "Application Support",
+        "CodeOutcome",
+        "codeoutcome.sqlite",
+      ),
+      source: "current-default",
+      legacy: false,
+    });
+  });
+
+  it("discovers a legacy database only while the new directory is absent", async () => {
+    const userHome = await mkdtemp(path.join(tmpdir(), "codeoutcome-home-"));
+    temporaryDirectories.push(userHome);
+    const legacyDirectory = path.join(
+      userHome,
+      "Library",
+      "Application Support",
+      "AgentLedger",
+    );
+    await mkdir(legacyDirectory, { recursive: true });
+    const legacyDatabase = new DatabaseSync(
+      path.join(legacyDirectory, "agentledger.sqlite"),
+    );
+    legacyDatabase.close();
+
+    expect(getCodeOutcomePaths({}, userHome, "darwin")).toMatchObject({
+      dataDirectory: legacyDirectory,
+      source: "legacy-default",
+      legacy: true,
+    });
+
+    await mkdir(
+      path.join(userHome, "Library", "Application Support", "CodeOutcome"),
+      { recursive: true },
+    );
+    expect(getCodeOutcomePaths({}, userHome, "darwin")).toMatchObject({
+      source: "current-default",
+      legacy: false,
+    });
+  });
+
+  it("supports the legacy data environment variable without changing names", () => {
+    expect(
+      getCodeOutcomePaths(
+        { AGENTLEDGER_DATA_DIR: "/redacted/legacy-data" },
+        "/redacted/home",
+        "darwin",
+      ),
+    ).toEqual({
+      dataDirectory: "/redacted/legacy-data",
+      databaseFile: "/redacted/legacy-data/agentledger.sqlite",
+      source: "legacy-environment",
+      legacy: true,
+    });
   });
 });

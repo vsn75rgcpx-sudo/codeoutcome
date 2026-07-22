@@ -9,10 +9,9 @@ permissions:
   contents: read
 
 env:
-  AGENTLEDGER_DATA_DIR: ${{ runner.temp }}/agentledger-data
-  AGENTLEDGER_CLAUDE_LOG_DIR: ${{ runner.temp }}/provider-logs/claude
-  AGENTLEDGER_CODEX_LOG_DIR: ${{ runner.temp }}/provider-logs/codex
-  HOME: ${{ runner.temp }}/agentledger-home
+  CODEOUTCOME_DATA_DIR: ${{ runner.temp }}/codeoutcome-data
+  CODEOUTCOME_CLAUDE_LOG_DIR: ${{ runner.temp }}/provider-logs/claude
+  CODEOUTCOME_CODEX_LOG_DIR: ${{ runner.temp }}/provider-logs/codex
 
 jobs:
   quality:
@@ -27,7 +26,7 @@ jobs:
           node-version: 22.13.1
           cache: pnpm
       - name: Prepare isolated local directories
-        run: mkdir -p "$HOME" "$AGENTLEDGER_DATA_DIR" "$AGENTLEDGER_CLAUDE_LOG_DIR" "$AGENTLEDGER_CODEX_LOG_DIR"
+        run: mkdir -p "$CODEOUTCOME_DATA_DIR" "$CODEOUTCOME_CLAUDE_LOG_DIR" "$CODEOUTCOME_CODEX_LOG_DIR"
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
@@ -48,7 +47,7 @@ jobs:
         with:
           node-version: 22.13.1
           cache: pnpm
-      - run: mkdir -p "$HOME" "$AGENTLEDGER_DATA_DIR" "$AGENTLEDGER_CLAUDE_LOG_DIR" "$AGENTLEDGER_CODEX_LOG_DIR"
+      - run: mkdir -p "$CODEOUTCOME_DATA_DIR" "$CODEOUTCOME_CLAUDE_LOG_DIR" "$CODEOUTCOME_CODEX_LOG_DIR"
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
@@ -71,7 +70,7 @@ jobs:
         with:
           node-version: 22.13.1
           cache: pnpm
-      - run: mkdir -p "$HOME" "$AGENTLEDGER_DATA_DIR" "$AGENTLEDGER_CLAUDE_LOG_DIR" "$AGENTLEDGER_CODEX_LOG_DIR"
+      - run: mkdir -p "$CODEOUTCOME_DATA_DIR" "$CODEOUTCOME_CLAUDE_LOG_DIR" "$CODEOUTCOME_CODEX_LOG_DIR"
       - run: pnpm install --frozen-lockfile
       - run: pnpm package:pack
       - run: pnpm package:inspect

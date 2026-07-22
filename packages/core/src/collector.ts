@@ -2,7 +2,7 @@ import type {
   CollectionResult,
   Session,
   SessionAdapter,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown parsing error";

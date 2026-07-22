@@ -138,6 +138,6 @@ describe("dashboard UI", () => {
   it("keeps tables usable in narrow layouts", async () => {
     const styles = await source("styles.css");
     expect(styles).toContain("overflow-x: auto");
-    expect(styles).toContain("@media (max-width: 760px)");
+    expect(styles).toContain("@media (max-width: 860px)");
   });
 });

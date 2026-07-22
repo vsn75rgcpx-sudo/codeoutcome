@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { TestProcessRunner } from "@agentledger/core";
+import type { TestProcessRunner } from "@codeoutcome/core";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli } from "./cli.js";
@@ -10,13 +10,13 @@ import { runCli } from "./cli.js";
 const temporaryDirectories: string[] = [];
 
 async function context() {
-  const directory = await mkdtemp(path.join(tmpdir(), "agentledger-test-cli-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-test-cli-"));
   temporaryDirectories.push(directory);
   const stdout: string[] = [];
   const stderr: string[] = [];
   return {
     directory,
-    databaseFile: path.join(directory, "agentledger.sqlite"),
+    databaseFile: path.join(directory, "codeoutcome.sqlite"),
     stdout,
     stderr,
     io: {
@@ -170,7 +170,7 @@ describe("test CLI", () => {
 
     fixture.stdout.length = 0;
     expect(await runCli(["test", "--help"], options)).toBe(0);
-    expect(fixture.stdout[0]).toContain("agentledger test import --file");
+    expect(fixture.stdout[0]).toContain("codeoutcome test import --file");
   });
 
   it("requires confirmation for deletion and keeps dry-run non-mutating", async () => {

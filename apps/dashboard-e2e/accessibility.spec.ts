@@ -43,7 +43,7 @@ test("dark theme has no serious or critical axe violations", async ({
   page,
 }) => {
   await page.addInitScript(() =>
-    localStorage.setItem("agentledger-theme", "dark"),
+    localStorage.setItem("codeoutcome-theme", "dark"),
   );
   await page.goto(runtime.url);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");

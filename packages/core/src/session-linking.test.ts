@@ -4,7 +4,7 @@ import type {
   GitChangeSummary,
   Session,
   TrackingRun,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import { scoreSessionLink } from "./session-linking.js";
 

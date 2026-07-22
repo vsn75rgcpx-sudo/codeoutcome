@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { ProviderProcessRunner } from "@agentledger/core";
+import type { ProviderProcessRunner } from "@codeoutcome/core";
 
 import { runCli, type CliIo } from "./cli.js";
 
@@ -35,10 +35,10 @@ function memoryIo(): { io: CliIo; stdout: string[]; stderr: string[] } {
 }
 
 async function repository(): Promise<{ root: string; databaseFile: string }> {
-  const root = await mkdtemp(path.join(tmpdir(), "agentledger-cli-track-"));
+  const root = await mkdtemp(path.join(tmpdir(), "codeoutcome-cli-track-"));
   temporaryDirectories.push(root);
   await execFileAsync("git", ["init", "-b", "main"], { cwd: root });
-  await execFileAsync("git", ["config", "user.name", "AgentLedger Test"], {
+  await execFileAsync("git", ["config", "user.name", "CodeOutcome Test"], {
     cwd: root,
   });
   await execFileAsync(
@@ -51,7 +51,7 @@ async function repository(): Promise<{ root: string; databaseFile: string }> {
   await execFileAsync("git", ["commit", "-m", "initial"], { cwd: root });
   return {
     root,
-    databaseFile: path.join(root, ".git", "agentledger-test.sqlite"),
+    databaseFile: path.join(root, ".git", "codeoutcome-test.sqlite"),
   };
 }
 
@@ -179,7 +179,7 @@ describe("Phase 3 CLI JSON", () => {
       expect(executable).toBe("fake-codex");
       expect(arguments_).toEqual(["--model", "value; touch not-run"]);
       expect(spawn.shell).toBe(false);
-      expect(spawn.env.AGENTLEDGER_TRACKING_RUN_ID).toMatch(/^[0-9a-f-]{36}$/);
+      expect(spawn.env.CODEOUTCOME_TRACKING_RUN_ID).toMatch(/^[0-9a-f-]{36}$/);
       return { exitCode: 9, signal: null };
     };
 
@@ -208,11 +208,11 @@ describe("Phase 3 CLI JSON", () => {
       databaseFile,
       environment: {
         ...process.env,
-        AGENTLEDGER_TRACKING_RUN_ID: "existing-fixture",
+        CODEOUTCOME_TRACKING_RUN_ID: "existing-fixture",
       },
       io: io.io,
       processRunner: async (_executable, _arguments, spawn) => {
-        expect(spawn.env.AGENTLEDGER_TRACKING_RUN_ID).toBe("existing-fixture");
+        expect(spawn.env.CODEOUTCOME_TRACKING_RUN_ID).toBe("existing-fixture");
         return { exitCode: 0, signal: null };
       },
       userHome: root,
@@ -223,7 +223,7 @@ describe("Phase 3 CLI JSON", () => {
   });
 
   it("returns a structured WARN outside a Git repository", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "agentledger-cli-nongit-"));
+    const root = await mkdtemp(path.join(tmpdir(), "codeoutcome-cli-nongit-"));
     temporaryDirectories.push(root);
     const io = memoryIo();
 

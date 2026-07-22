@@ -2,8 +2,8 @@ import { accessSync, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
-import { selectTestComparison } from "@agentledger/core";
-import { LATEST_MIGRATION_VERSION } from "@agentledger/database";
+import { selectTestComparison } from "@codeoutcome/core";
+import { LATEST_MIGRATION_VERSION } from "@codeoutcome/database";
 import {
   redactHomePath,
   type DashboardActivity,
@@ -32,7 +32,7 @@ import {
   type TestRun,
   type TestStage,
   type TrackingRunStatus,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 type Row = Record<string, unknown>;
 
@@ -411,29 +411,29 @@ export class DashboardStore {
     if (this.status === "missing") {
       throw new DashboardDataError(
         "database_missing",
-        "The AgentLedger database does not exist yet.",
-        "Run: agentledger import --provider codex",
+        "The CodeOutcome database does not exist yet.",
+        "Run: codeoutcome import --provider codex",
       );
     }
     if (this.status === "outdated") {
       throw new DashboardDataError(
         "schema_outdated",
-        "The AgentLedger database schema is older than this dashboard supports.",
-        "Run: agentledger doctor, then a normal CLI command to apply migrations",
+        "The CodeOutcome database schema is older than this dashboard supports.",
+        "Run: codeoutcome doctor, then a normal CLI command to apply migrations",
       );
     }
     if (this.status === "locked") {
       throw new DashboardDataError(
         "database_locked",
-        "The AgentLedger database is currently locked.",
+        "The CodeOutcome database is currently locked.",
         "Close the conflicting process and refresh the dashboard",
       );
     }
     if (this.status !== "ready" || this.#database === null) {
       throw new DashboardDataError(
         "database_error",
-        "The AgentLedger database could not be read.",
-        "Run: agentledger doctor",
+        "The CodeOutcome database could not be read.",
+        "Run: codeoutcome doctor",
       );
     }
     return this.#database;
@@ -1328,8 +1328,8 @@ export class DashboardStore {
       privacyMode: this.#options.privacyMode,
       version: this.#options.version,
       suggestions: [
-        "Run: agentledger doctor",
-        "Run: agentledger import --provider codex",
+        "Run: codeoutcome doctor",
+        "Run: codeoutcome import --provider codex",
       ],
     };
   }

@@ -1,7 +1,7 @@
 # Privacy
 
-AgentLedger is local-first and has no telemetry. It does not send usage,
-repository, test, or configuration data to AgentLedger maintainers.
+CodeOutcome is local-first and has no telemetry. It does not send usage,
+repository, test, or configuration data to CodeOutcome maintainers.
 
 ## What is read
 
@@ -17,10 +17,10 @@ SQLite stores session identifiers, Provider/model names, timestamps, Token
 counts, sanitized local paths, repository/branch metadata, aggregate observed
 Git change metadata, aggregate test outcomes, import state, accounting evidence,
 and irreversible fingerprints used for deduplication. On macOS the default is
-`~/Library/Application Support/AgentLedger/agentledger.sqlite`; Linux uses the
+`~/Library/Application Support/CodeOutcome/codeoutcome.sqlite`; Linux uses the
 documented XDG data directory.
 
-AgentLedger does not store Prompt or response bodies, source code, full diffs,
+CodeOutcome does not store Prompt or response bodies, source code, full diffs,
 raw test output, stack traces, test case bodies, shell environment variables,
 API keys, cookies, access tokens, or unredacted secret-like command arguments.
 
@@ -38,8 +38,8 @@ provides no write API. Do not put it behind a public proxy or port forward it.
 
 ## Deletion and uninstall
 
-Stop AgentLedger first. After making any wanted backup, delete the local
-`agentledger.sqlite`, `agentledger.sqlite-wal`, `agentledger.sqlite-shm`, and
-`config.json` files from the AgentLedger data directory. Uninstalling the CLI
+Stop CodeOutcome first. After making any wanted backup, delete the local
+`codeoutcome.sqlite`, `codeoutcome.sqlite-wal`, `codeoutcome.sqlite-shm`, and
+`config.json` files from the CodeOutcome data directory. Uninstalling the CLI
 does not delete local data automatically. Never attach a real database or raw
 Provider log to a public issue.

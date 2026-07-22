@@ -1,6 +1,6 @@
 # Accessibility
 
-AgentLedger uses native HTML landmarks, controls, tables, headings, and links.
+CodeOutcome uses native HTML landmarks, controls, tables, headings, and links.
 Playwright runs `@axe-core/playwright` against Overview, Sessions, Session
 Detail, Tracking Runs, Tracking Detail, Test Runs, Test Detail, and Diagnostics.
 The release gate allows no serious or critical axe violations.

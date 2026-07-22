@@ -6,13 +6,13 @@ import { promisify } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { SessionDatabase, type SourceImportInput } from "@agentledger/database";
+import { SessionDatabase, type SourceImportInput } from "@codeoutcome/database";
 import {
   stableSessionId,
   type Session,
   type TestRun,
   type UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   abandonTracking,
@@ -42,12 +42,12 @@ async function fixture(): Promise<{
   repository: string;
   database: SessionDatabase;
 }> {
-  const directory = await mkdtemp(path.join(tmpdir(), "agentledger-track-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-track-"));
   temporaryDirectories.push(directory);
   const repository = path.join(directory, "repository");
   await execFileAsync("mkdir", [repository]);
   await git(repository, ["init", "-b", "main"]);
-  await git(repository, ["config", "user.name", "AgentLedger Test"]);
+  await git(repository, ["config", "user.name", "CodeOutcome Test"]);
   await git(repository, ["config", "user.email", "fixture@example.invalid"]);
   await writeFile(path.join(repository, "tracked.txt"), "initial\n", "utf8");
   await git(repository, ["add", "tracked.txt"]);
@@ -55,7 +55,7 @@ async function fixture(): Promise<{
   return {
     directory,
     repository: await realpath(repository),
-    database: new SessionDatabase(path.join(directory, "agentledger.sqlite")),
+    database: new SessionDatabase(path.join(directory, "codeoutcome.sqlite")),
   };
 }
 

@@ -1,6 +1,6 @@
 # Contributing
 
-AgentLedger welcomes small, privacy-preserving changes. Before starting a large
+CodeOutcome welcomes small, privacy-preserving changes. Before starting a large
 feature, open a proposal describing the user need, local-data implications, and
 test plan. Current scope excludes cloud sync, accounts, remote dashboards,
 productivity scores, and exact AI code attribution.

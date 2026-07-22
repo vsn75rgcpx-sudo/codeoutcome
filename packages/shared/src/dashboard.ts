@@ -11,7 +11,7 @@ import type {
 } from "./index.js";
 
 export const DASHBOARD_API_VERSION = "phase-4a-v1";
-export const DASHBOARD_TOKEN_HEADER = "x-agentledger-dashboard-token";
+export const DASHBOARD_TOKEN_HEADER = "x-codeoutcome-dashboard-token";
 
 export type TokenValue = string;
 export type DashboardRange = "7d" | "30d" | "all";

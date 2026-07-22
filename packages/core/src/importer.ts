@@ -6,15 +6,15 @@ import {
   type ImportRunSummary,
   type RepositoryInput,
   type SessionDatabase,
-} from "@agentledger/database";
-import { enrichSessionWithGit } from "@agentledger/git-tracker";
+} from "@codeoutcome/database";
+import { enrichSessionWithGit } from "@codeoutcome/git-tracker";
 import {
   canonicalizePath,
   hashFilePrefix,
   type Provider,
   type ProviderSelection,
   type SessionAdapter,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import { DEFAULT_PRICING_CATALOG, type PricingCatalog } from "./pricing.js";
 import { analyzeUsageEvents } from "./accounting.js";

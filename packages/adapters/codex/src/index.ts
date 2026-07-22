@@ -18,7 +18,7 @@ import {
   type SessionAdapter,
   type UsageEvent,
   type UsageEventType,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 interface UsageTotals {
   input: number;
@@ -296,7 +296,7 @@ export class CodexAdapter implements SessionAdapter {
             ? "incremental_events"
             : "unavailable",
         accountingStatus: usage.hasNegativeValues ? "invalid" : "verified",
-        accountingVersion: "agentledger-accounting-v1",
+        accountingVersion: "codeoutcome-accounting-v1",
         lastUsageEventAt: usageEvents.at(-1)?.eventTime ?? endedAt ?? null,
         sourceFile,
         sourceFileHash: "",

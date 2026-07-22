@@ -3,7 +3,7 @@ import { access, constants } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { canonicalizePath, type Session } from "@agentledger/shared";
+import { canonicalizePath, type Session } from "@codeoutcome/shared";
 
 export {
   captureGitSnapshot,

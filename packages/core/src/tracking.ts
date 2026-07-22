@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
-import type { SessionDatabase } from "@agentledger/database";
+import type { SessionDatabase } from "@codeoutcome/database";
 import {
   captureGitSnapshot,
   compareGitSnapshots,
   repositoryInputFromSnapshot,
   type GitProcessRunner,
-} from "@agentledger/git-tracker";
+} from "@codeoutcome/git-tracker";
 import {
   canonicalizePath,
   type GitPrivacyMode,
@@ -15,7 +15,7 @@ import {
   type Provider,
   type TrackingRun,
   type TrackingRunStatus,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   scoreSessionLink,

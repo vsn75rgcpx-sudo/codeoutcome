@@ -1,1 +1,1 @@
-export const AGENTLEDGER_VERSION = "0.1.0-alpha.1";
+export const CODEOUTCOME_VERSION = "0.1.0-alpha.1";

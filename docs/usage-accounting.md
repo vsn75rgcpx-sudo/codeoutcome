@@ -60,7 +60,7 @@ Supported primary shape:
 - conservative fallbacks to `payload.usage` or top-level `usage` for older
   records.
 
-`total_token_usage` is a cumulative session snapshot. AgentLedger orders valid
+`total_token_usage` is a cumulative session snapshot. CodeOutcome orders valid
 snapshots by event time and selects the last one as canonical. Historical
 snapshots remain in `usage_events` for audit and are never summed or combined by
 taking independent per-field maxima.
@@ -74,7 +74,7 @@ last/legacy usage records classified as increments and deduplicated before
 summing.
 
 If standalone increments coexist with cumulative snapshots, or a cumulative
-counter decreases, AgentLedger selects the final provider snapshot without
+counter decreases, CodeOutcome selects the final provider snapshot without
 adding the uncertain range and marks the session `ambiguous`. The audit exposes
 the exact reason instead of silently choosing a hybrid total.
 
@@ -111,7 +111,7 @@ fixture before its results can be considered reliable.
 
 Source symlinks are resolved and traversal outside the configured log root is
 ignored. Repository and source paths are canonicalized where possible. Path
-case follows the filesystem result; AgentLedger does not force lowercase because
+case follows the filesystem result; CodeOutcome does not force lowercase because
 case-sensitive volumes are valid. Relative paths are resolved before storage.
 
 ## Stable identity
@@ -132,7 +132,7 @@ version, update timestamp, description/source, currency, and per-model rates.
 The current `local-unpriced-v1` catalog intentionally enables no rates. Unknown
 models and unverified rates produce `unavailable`, not zero.
 
-If a future versioned local catalog supplies a matching model, AgentLedger will
+If a future versioned local catalog supplies a matching model, CodeOutcome will
 calculate Uncached Input, Cached Input, and Output separately. Reasoning is not
 priced again because it is part of Output. The result is labeled `estimated`.
 Mixed priced/unpriced summaries are labeled `partial`.
@@ -148,7 +148,7 @@ statement.
 - Missing-ID sessions are path-stable, not content-stable, when files move.
 - Cross-file duplicate detection uses a Provider event ID when one exists.
   Formats without that ID cannot reliably identify copied incremental events.
-- Source logs may omit cached-token or cost fields. AgentLedger does not infer
+- Source logs may omit cached-token or cost fields. CodeOutcome does not infer
   values that are absent.
 - The database stores canonical local paths internally even though CLI output
   replaces the current home directory with `~`.

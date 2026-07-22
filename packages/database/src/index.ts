@@ -31,7 +31,7 @@ import type {
   TrackingRunStatus,
   UsageEvent,
   UsageEventType,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   LATEST_MIGRATION_VERSION,
@@ -42,9 +42,14 @@ import {
 export { LATEST_MIGRATION_VERSION } from "./migrations.js";
 export { REPARSE_REQUIRED_CHECKPOINT } from "./migrations.js";
 
-export interface AgentLedgerPaths {
+export type CodeOutcomePathSource =
+  "configured" | "current-default" | "legacy-environment" | "legacy-default";
+
+export interface CodeOutcomePaths {
   dataDirectory: string;
   databaseFile: string;
+  source: CodeOutcomePathSource;
+  legacy: boolean;
 }
 
 export interface ImportRunSummary {
@@ -932,17 +937,43 @@ function testRunLinkFromRow(row: TestRunLinkRow): TestRunLink {
   };
 }
 
-export function getAgentLedgerPaths(
+export function getCodeOutcomePaths(
   environment: NodeJS.ProcessEnv = process.env,
   userHome = homedir(),
   platform = process.platform,
-): AgentLedgerPaths {
-  const configured = environment.AGENTLEDGER_DATA_DIR?.trim();
-  let dataDirectory: string;
+): CodeOutcomePaths {
+  const configured = environment.CODEOUTCOME_DATA_DIR?.trim();
   if (configured !== undefined && configured.length > 0) {
-    dataDirectory = path.resolve(configured);
-  } else if (platform === "darwin") {
+    const dataDirectory = path.resolve(configured);
+    return {
+      dataDirectory,
+      databaseFile: path.join(dataDirectory, "codeoutcome.sqlite"),
+      source: "configured",
+      legacy: false,
+    };
+  }
+
+  const legacyConfigured = environment.AGENTLEDGER_DATA_DIR?.trim();
+  if (legacyConfigured !== undefined && legacyConfigured.length > 0) {
+    const dataDirectory = path.resolve(legacyConfigured);
+    return {
+      dataDirectory,
+      databaseFile: path.join(dataDirectory, "agentledger.sqlite"),
+      source: "legacy-environment",
+      legacy: true,
+    };
+  }
+
+  let dataDirectory: string;
+  let legacyDataDirectory: string;
+  if (platform === "darwin") {
     dataDirectory = path.join(
+      userHome,
+      "Library",
+      "Application Support",
+      "CodeOutcome",
+    );
+    legacyDataDirectory = path.join(
       userHome,
       "Library",
       "Application Support",
@@ -950,15 +981,32 @@ export function getAgentLedgerPaths(
     );
   } else {
     const xdgDataHome = environment.XDG_DATA_HOME?.trim();
-    dataDirectory =
+    const dataHome =
       xdgDataHome !== undefined && xdgDataHome.length > 0
-        ? path.join(path.resolve(xdgDataHome), "agentledger")
-        : path.join(userHome, ".local", "share", "agentledger");
+        ? path.resolve(xdgDataHome)
+        : path.join(userHome, ".local", "share");
+    dataDirectory = path.join(dataHome, "codeoutcome");
+    legacyDataDirectory = path.join(dataHome, "agentledger");
   }
 
+  const databaseFile = path.join(dataDirectory, "codeoutcome.sqlite");
+  const legacyDatabaseFile = path.join(
+    legacyDataDirectory,
+    "agentledger.sqlite",
+  );
+  if (!existsSync(dataDirectory) && existsSync(legacyDatabaseFile)) {
+    return {
+      dataDirectory: legacyDataDirectory,
+      databaseFile: legacyDatabaseFile,
+      source: "legacy-default",
+      legacy: true,
+    };
+  }
   return {
     dataDirectory,
-    databaseFile: path.join(dataDirectory, "agentledger.sqlite"),
+    databaseFile,
+    source: "current-default",
+    legacy: false,
   };
 }
 

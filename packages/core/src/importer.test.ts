@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ClaudeCodeAdapter } from "@agentledger/adapter-claude-code";
-import { SessionDatabase } from "@agentledger/database";
+import { ClaudeCodeAdapter } from "@codeoutcome/adapter-claude-code";
+import { SessionDatabase } from "@codeoutcome/database";
 
 import { runImport } from "./index.js";
 
@@ -44,7 +44,7 @@ function claudeRecord(
 
 describe("runImport", () => {
   it("is idempotent and imports only an appended JSONL tail", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-import-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-import-"));
     temporaryDirectories.push(directory);
     const logDirectory = path.join(directory, "logs");
     const sourceFile = path.join(logDirectory, "session.jsonl");
@@ -55,7 +55,7 @@ describe("runImport", () => {
       "utf8",
     );
     const database = new SessionDatabase(
-      path.join(directory, "agentledger.sqlite"),
+      path.join(directory, "codeoutcome.sqlite"),
     );
     const adapter = new ClaudeCodeAdapter(logDirectory);
 
@@ -101,7 +101,7 @@ describe("runImport", () => {
   });
 
   it("reports an empty provider source as a warning in dry-run mode", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-empty-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-empty-"));
     temporaryDirectories.push(directory);
 
     const report = await runImport({

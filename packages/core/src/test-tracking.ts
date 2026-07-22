@@ -1,14 +1,16 @@
 import path from "node:path";
 
-import type { SessionDatabase } from "@agentledger/database";
-import { inspectGitContext } from "@agentledger/git-tracker";
+import type { SessionDatabase } from "@codeoutcome/database";
+import { inspectGitContext } from "@codeoutcome/git-tracker";
 import {
   canonicalizePath,
   type TestRun,
   type TestRunLink,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
-export const TRACKING_RUN_ENVIRONMENT_VARIABLE = "AGENTLEDGER_TRACKING_RUN_ID";
+export const TRACKING_RUN_ENVIRONMENT_VARIABLE = "CODEOUTCOME_TRACKING_RUN_ID";
+export const LEGACY_TRACKING_RUN_ENVIRONMENT_VARIABLE =
+  "AGENTLEDGER_TRACKING_RUN_ID";
 
 export interface ProviderTestHookContext {
   trackingRunId: string;
@@ -45,8 +47,19 @@ export async function resolveTestAssociation(options: {
   const environment = options.environment ?? process.env;
   const git = await inspectGitContext(workingDirectory);
   const repositoryPath = git.repositoryPath;
-  const explicitId = environment[TRACKING_RUN_ENVIRONMENT_VARIABLE]?.trim();
   const warnings: string[] = [];
+  const currentId = environment[TRACKING_RUN_ENVIRONMENT_VARIABLE]?.trim();
+  const legacyId =
+    environment[LEGACY_TRACKING_RUN_ENVIRONMENT_VARIABLE]?.trim();
+  const explicitId =
+    currentId !== undefined && currentId.length > 0 ? currentId : legacyId;
+  if (
+    (currentId === undefined || currentId.length === 0) &&
+    legacyId !== undefined &&
+    legacyId.length > 0
+  ) {
+    warnings.push("legacy_tracking_run_environment_variable_is_deprecated");
+  }
 
   if (explicitId !== undefined && explicitId.length > 0) {
     const run = options.database.getTrackingRun(explicitId);
@@ -67,7 +80,11 @@ export async function resolveTestAssociation(options: {
         state: "linked",
         confidence: 1,
         reasons: [
-          `active tracking run selected by ${TRACKING_RUN_ENVIRONMENT_VARIABLE}`,
+          `active tracking run selected by ${
+            currentId !== undefined && currentId.length > 0
+              ? TRACKING_RUN_ENVIRONMENT_VARIABLE
+              : LEGACY_TRACKING_RUN_ENVIRONMENT_VARIABLE
+          }`,
         ],
         warnings,
       };

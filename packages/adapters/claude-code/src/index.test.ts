@@ -52,7 +52,7 @@ describe("ClaudeCodeAdapter", () => {
   });
 
   it("retains an incomplete trailing record for a later append", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-claude-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-claude-"));
     temporaryDirectories.push(directory);
     const sourceFile = path.join(directory, "truncated.jsonl");
     const complete = `${JSON.stringify({

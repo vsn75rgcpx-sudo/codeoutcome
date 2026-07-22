@@ -4,11 +4,11 @@ import { userInfo } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { AGENTLEDGER_VERSION } from "../packages/shared/src/index.js";
+import { CODEOUTCOME_VERSION } from "../packages/shared/src/index.js";
 
 const execFileAsync = promisify(execFile);
 const tarball = path.resolve(
-  `artifacts/package/agentledger-cli-${AGENTLEDGER_VERSION}.tgz`,
+  `artifacts/package/codeoutcome-${CODEOUTCOME_VERSION}.tgz`,
 );
 const { stdout } = await execFileAsync("tar", ["-tzf", tarball], {
   maxBuffer: 10 * 1024 * 1024,
@@ -68,6 +68,22 @@ if (
 ) {
   throw new Error(
     "Package contains a local absolute path, username, or key marker",
+  );
+}
+const obsoleteUserVisibleBrandMarkers = [
+  "AgentLedger —",
+  "AgentLedger Dashboard",
+  "AgentLedger local dashboard",
+  '"name": "agentledger"',
+  '"agentledger": "apps/cli/dist/index.js"',
+];
+if (
+  obsoleteUserVisibleBrandMarkers.some((marker) =>
+    combinedText.includes(marker),
+  )
+) {
+  throw new Error(
+    "Package contains the legacy brand outside documented compatibility references",
   );
 }
 if (

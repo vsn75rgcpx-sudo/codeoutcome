@@ -1,13 +1,13 @@
 import type {
   SessionAccountingUpdate,
   SessionDatabase,
-} from "@agentledger/database";
+} from "@codeoutcome/database";
 import type {
   AccountingMethod,
   Provider,
   Session,
   UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   analyzeUsageEvents,
@@ -199,7 +199,7 @@ export function auditUsage(
   return {
     accountingVersion:
       analyzed[0]?.analysis.accountingVersion ??
-      "agentledger-accounting-v2.5.0",
+      "codeoutcome-accounting-v2.5.0",
     checkedSessions: analyzed.length,
     warningSessions: analyzed.filter(
       (item) => item.analysis.accountingStatus === "warning",

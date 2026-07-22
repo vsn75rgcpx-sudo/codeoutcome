@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { SessionDatabase } from "../packages/database/src/index.js";
 
 export const DEMO_NOW = "2026-07-21T12:00:00.000Z";
-export const DEMO_ROOT = "/agentledger-demo";
+export const DEMO_ROOT = "/codeoutcome-demo";
 
 export interface DemoDatabaseSummary {
   databaseFile: string;

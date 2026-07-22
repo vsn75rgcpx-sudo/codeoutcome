@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   configFilePath,
-  readAgentLedgerConfig,
+  readCodeOutcomeConfig,
   setPrivacyMode,
 } from "./config.js";
 
@@ -22,10 +22,10 @@ afterEach(async () => {
 
 describe("local privacy configuration", () => {
   it("defaults to git-metadata without creating a config file", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-config-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-config-"));
     temporaryDirectories.push(directory);
 
-    expect(await readAgentLedgerConfig(directory)).toEqual({
+    expect(await readCodeOutcomeConfig(directory)).toEqual({
       privacy: "git-metadata",
     });
     await expect(
@@ -34,11 +34,11 @@ describe("local privacy configuration", () => {
   });
 
   it("persists strict mode only in the local data directory", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-config-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-config-"));
     temporaryDirectories.push(directory);
 
     await setPrivacyMode(directory, "strict");
-    expect(await readAgentLedgerConfig(directory)).toEqual({
+    expect(await readCodeOutcomeConfig(directory)).toEqual({
       privacy: "strict",
     });
     expect(

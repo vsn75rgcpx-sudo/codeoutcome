@@ -1,13 +1,13 @@
 # Local Git session tracking
 
-AgentLedger records **Changes observed during an AI coding session**. It is not
+CodeOutcome records **Changes observed during an AI coding session**. It is not
 an AI-code attribution system and does not claim that every observed line was
 written by Claude Code or Codex.
 
 ## Tracking runs
 
 A tracking run connects two read-only Git snapshots with an optional imported
-AgentLedger session:
+CodeOutcome session:
 
 ```text
 track start -> start snapshot -> AI coding interval -> end snapshot
@@ -17,22 +17,22 @@ track start -> start snapshot -> AI coding interval -> end snapshot
 Manual use:
 
 ```sh
-agentledger track start --provider codex --label "fix login timeout"
-agentledger track status
-agentledger track stop
-agentledger track show <tracking-run-id>
+codeoutcome track start --provider codex --label "fix login timeout"
+codeoutcome track status
+codeoutcome track stop
+codeoutcome track show <tracking-run-id>
 ```
 
-`agentledger run codex -- <arguments>` performs the same start/stop lifecycle
+`codeoutcome run codex -- <arguments>` performs the same start/stop lifecycle
 around the local `codex` executable. It uses a direct child process with inherited
 terminal input/output, `shell:false`, and an argument array. Normal exits,
 non-zero exits, SIGINT, and SIGTERM all attempt finalization. No Codex settings or
 permissions are changed.
 
 The runner also passes its tracking ID to nested commands through the dedicated
-`AGENTLEDGER_TRACKING_RUN_ID` environment value. An existing value is never
-overwritten. Explicit `agentledger test run -- ...` commands can use this hint
-for reliable association; AgentLedger does not transparently intercept every
+`CODEOUTCOME_TRACKING_RUN_ID` environment value. An existing value is never
+overwritten. Explicit `codeoutcome test run -- ...` commands can use this hint
+for reliable association; CodeOutcome does not transparently intercept every
 test command executed by a Provider.
 
 ## Recorded Git metadata
@@ -47,7 +47,7 @@ upstream rev-list output. They may record:
 - binary markers, ahead/behind counts when an upstream exists, and irreversible
   SHA-256 path fingerprints.
 
-AgentLedger does not save source text, ignored files, complete diffs, prompts,
+CodeOutcome does not save source text, ignored files, complete diffs, prompts,
 responses, credentials, or environment variables. It does not read untracked
 files to invent line counts. Binary and otherwise indeterminate counts remain
 `unknown`.
@@ -56,7 +56,7 @@ files to invent line counts. Binary and otherwise indeterminate counts remain
 
 When the baseline is clean, the branch is unchanged, and HEAD stays fixed, the
 end working state can be described as observed changes. When HEAD advances,
-AgentLedger uses `<start-head>..<end-head>` numstat as committed net change.
+CodeOutcome uses `<start-head>..<end-head>` numstat as committed net change.
 
 A dirty start is marked `baseline_dirty`; working-tree line contribution remains
 unknown instead of subtracting two unrelated states. Automatic session-link
@@ -90,8 +90,8 @@ baseline caps the final automatic level at medium.
 Manual correction preserves history:
 
 ```sh
-agentledger track link <tracking-run-id> --session <session-id>
-agentledger track unlink <tracking-run-id>
+codeoutcome track link <tracking-run-id> --session <session-id>
+codeoutcome track unlink <tracking-run-id>
 ```
 
 ## Privacy modes
@@ -100,7 +100,7 @@ agentledger track unlink <tracking-run-id>
 and available line counts without file content or full diffs.
 
 ```sh
-agentledger config set privacy strict
+codeoutcome config set privacy strict
 ```
 
 `strict` applies to new snapshots and stores no plaintext relative path; it keeps
@@ -113,9 +113,9 @@ An abnormal terminal exit can leave a run `active`. `doctor` reports this as a
 warning.
 
 ```sh
-agentledger track recover --list
-agentledger track recover <tracking-run-id>
-agentledger track abandon <tracking-run-id>
+codeoutcome track recover --list
+codeoutcome track recover <tracking-run-id>
+codeoutcome track abandon <tracking-run-id>
 ```
 
 Recovery captures the current state with trigger `recovery` and uses that

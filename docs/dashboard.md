@@ -1,6 +1,6 @@
 # Local Dashboard
 
-AgentLedger's Dashboard is a read-only local web interface over the existing
+CodeOutcome's Dashboard is a read-only local web interface over the existing
 SQLite database. It is not a desktop application, remote service, or data entry
 tool. It has no cloud sync, account system, remote access mode, or write action.
 
@@ -33,7 +33,7 @@ tests with `pnpm dashboard:test`.
 
 Each process creates a cryptographically random access token in memory. The
 server injects it into the initial HTML meta element, and the browser sends it in
-the `X-AgentLedger-Dashboard-Token` header. The token is never placed in the URL,
+the `X-CodeOutcome-Dashboard-Token` header. The token is never placed in the URL,
 database, configuration, CLI output, or Git. Restarting invalidates it.
 
 The server validates Host, rejects a mismatched Origin, does not enable CORS,
@@ -65,9 +65,9 @@ as decimal strings to preserve integers larger than JavaScript's safe range.
 Canonical Total is Input plus Output; Cached Input is already part of Input and
 is not added a second time.
 
-If the database is missing, the UI reports that `agentledger import` must be run
+If the database is missing, the UI reports that `codeoutcome import` must be run
 instead of creating an empty file. If the schema is older than migration 5, run
-a normal writable CLI command such as `agentledger import` to apply migrations;
+a normal writable CLI command such as `codeoutcome import` to apply migrations;
 the Dashboard will not do so. Lock and integrity failures are returned as
 sanitized errors without SQL or absolute paths.
 
@@ -76,13 +76,13 @@ sanitized errors without SQL or absolute paths.
 The committed images below are captured by Playwright from the deterministic,
 fully synthetic Demo database at a fixed 1440×900 viewport. They are not mockups.
 
-![AgentLedger Overview in the light theme using synthetic Demo data](assets/dashboard-overview-light.png)
+![CodeOutcome Overview in the light theme using synthetic Demo data](assets/dashboard-overview-light.png)
 
-![AgentLedger Overview in the dark theme using synthetic Demo data](assets/dashboard-overview-dark.png)
+![CodeOutcome Overview in the dark theme using synthetic Demo data](assets/dashboard-overview-dark.png)
 
-![AgentLedger tracking detail with observed Git and aggregate test metadata](assets/dashboard-tracking-detail.png)
+![CodeOutcome tracking detail with observed Git and aggregate test metadata](assets/dashboard-tracking-detail.png)
 
-![AgentLedger session detail with canonical Token accounting](assets/dashboard-session-detail.png)
+![CodeOutcome session detail with canonical Token accounting](assets/dashboard-session-detail.png)
 
 - **Overview** shows import state, session and Token totals, Provider/model
   distributions, daily trends, observed Git/test aggregates, comparable
@@ -130,7 +130,7 @@ text summaries, status labels include text/shape, and tables scroll horizontally
 in narrow windows.
 
 An empty Sessions or Tracking result means no record matches the current
-filters. **No recorded test runs** means AgentLedger has no explicitly wrapped
+filters. **No recorded test runs** means CodeOutcome has no explicitly wrapped
 or imported test record; it is not the same as zero failed tests. When the
 database has no underlying records, headline values that would be misleading as
 zero display `unavailable`.
@@ -143,7 +143,7 @@ zero display `unavailable`.
   `pnpm cli import --provider all` if appropriate.
 - **Schema outdated:** exit the Dashboard and run a normal writable CLI command
   that applies migrations. Re-run `pnpm cli doctor` before restarting.
-- **Database locked or integrity warning:** stop other local AgentLedger
+- **Database locked or integrity warning:** stop other local CodeOutcome
   processes and run `pnpm cli doctor`. The Dashboard will not repair or delete
   files.
 - **Provider log directory unavailable:** inspect Diagnostics and run

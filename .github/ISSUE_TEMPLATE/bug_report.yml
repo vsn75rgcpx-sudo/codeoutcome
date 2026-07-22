@@ -1,12 +1,12 @@
 name: Bug report
-description: Report a reproducible AgentLedger defect with synthetic data only.
+description: Report a reproducible CodeOutcome defect with synthetic data only.
 title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        **Privacy first:** do not upload real Codex/Claude JSONL, an AgentLedger database, Prompt/response text, source code, tokens, cookies, API keys, or other credentials. Create a synthetic redacted fixture. You may include `doctor --json` only after reviewing every path and field.
+        **Privacy first:** do not upload real Codex/Claude JSONL, a CodeOutcome database, Prompt/response text, source code, tokens, cookies, API keys, or other credentials. Create a synthetic redacted fixture. You may include `doctor --json` only after reviewing every path and field.
   - type: textarea
     id: summary
     attributes:
@@ -24,7 +24,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: AgentLedger version
+      label: CodeOutcome version
       placeholder: 0.1.0-alpha.1
     validations:
       required: true

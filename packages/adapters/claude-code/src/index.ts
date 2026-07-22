@@ -17,7 +17,7 @@ import {
   type ParsedLogFile,
   type SessionAdapter,
   type UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 function valueFrom(record: JsonRecord | undefined, keys: string[]): unknown[] {
   return keys.map((key) => record?.[key]);
@@ -213,7 +213,7 @@ export class ClaudeCodeAdapter implements SessionAdapter {
         accountingStatus: usageEvents.some((event) => event.hasNegativeValues)
           ? "invalid"
           : "verified",
-        accountingVersion: "agentledger-accounting-v1",
+        accountingVersion: "codeoutcome-accounting-v1",
         lastUsageEventAt: usageEvents.at(-1)?.eventTime ?? endedAt ?? null,
         sourceFile,
         sourceFileHash: "",

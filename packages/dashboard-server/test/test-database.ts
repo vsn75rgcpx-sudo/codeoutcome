@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { SessionDatabase } from "@agentledger/database";
+import { SessionDatabase } from "@codeoutcome/database";
 
 export function createDashboardTestDatabase(databaseFile: string): void {
   new SessionDatabase(databaseFile).close();

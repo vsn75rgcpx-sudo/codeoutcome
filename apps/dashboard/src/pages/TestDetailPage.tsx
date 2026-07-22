@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router";
 
-import type { DashboardTestRunDetail } from "@agentledger/shared/dashboard";
+import type { DashboardTestRunDetail } from "@codeoutcome/shared/dashboard";
 
 import { useApi } from "../api.js";
 import { useDashboard } from "../app.js";

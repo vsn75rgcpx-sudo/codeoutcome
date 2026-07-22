@@ -33,10 +33,10 @@ export {
 export type { ImportOptions, ImportReport, ImportWarning } from "./importer.js";
 export {
   configFilePath,
-  DEFAULT_AGENTLEDGER_CONFIG,
-  readAgentLedgerConfig,
+  DEFAULT_CODEOUTCOME_CONFIG,
+  readCodeOutcomeConfig,
   setPrivacyMode,
-  type AgentLedgerConfig,
+  type CodeOutcomeConfig,
 } from "./config.js";
 export {
   SESSION_LINK_SCORING,
@@ -99,6 +99,7 @@ export {
 } from "./test-reports.js";
 export {
   associationLink,
+  LEGACY_TRACKING_RUN_ENVIRONMENT_VARIABLE,
   manualLinkTestRun,
   resolveTestAssociation,
   TRACKING_RUN_ENVIRONMENT_VARIABLE,

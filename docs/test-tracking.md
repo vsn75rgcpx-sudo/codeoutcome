@@ -1,27 +1,27 @@
 # Local test run tracking
 
-AgentLedger records **Test results recorded during an AI coding session**. A
+CodeOutcome records **Test results recorded during an AI coding session**. A
 recorded result describes a command or imported report; it does not prove that
 the code is correct and does not attribute a test change to Claude Code or
 Codex.
 
 ## Why an explicit wrapper
 
-AgentLedger cannot safely and transparently intercept every shell command run by
+CodeOutcome cannot safely and transparently intercept every shell command run by
 an AI coding tool. Test tracking is therefore explicit:
 
 ```sh
-agentledger test run -- pytest -q
-agentledger test run --stage baseline -- pnpm test
-agentledger test run --stage final -- pnpm test
-agentledger test run -- cargo test
-agentledger test run -- go test ./...
+codeoutcome test run -- pytest -q
+codeoutcome test run --stage baseline -- pnpm test
+codeoutcome test run --stage final -- pnpm test
+codeoutcome test run -- cargo test
+codeoutcome test run -- go test ./...
 ```
 
 The wrapper launches an executable with an argument array and `shell:false`.
 It neither builds a shell command string nor modifies test configuration,
 installs reporters, or retries failures. Terminal output remains visible. The
-wrapper returns the child process exit code even if AgentLedger finalization
+wrapper returns the child process exit code even if CodeOutcome finalization
 fails.
 
 Output is captured only in a bounded in-memory buffer for aggregate parsing.
@@ -53,14 +53,14 @@ counts.
 Existing reports can be imported without changing a test runner:
 
 ```sh
-agentledger test import --file report.xml --format junit
-agentledger test import --file pytest-report.json --format pytest-json
-agentledger test import --file jest-report.json --format jest-json
-agentledger test import --file vitest-report.json --format vitest-json
-agentledger test import --file report.xml --format auto
+codeoutcome test import --file report.xml --format junit
+codeoutcome test import --file pytest-report.json --format pytest-json
+codeoutcome test import --file jest-report.json --format jest-json
+codeoutcome test import --file vitest-report.json --format vitest-json
+codeoutcome test import --file report.xml --format auto
 ```
 
-AgentLedger supports aggregate JUnit XML, pytest JSON, Jest JSON, and Vitest
+CodeOutcome supports aggregate JUnit XML, pytest JSON, Jest JSON, and Vitest
 JSON. JSON files have a hard size limit. XML declarations that could enable a
 DTD, external entity, or entity expansion are rejected before parsing. Imports
 are transactional. The report itself is not copied: only a fingerprint, size,
@@ -75,12 +75,12 @@ event; it does not create a second cumulative result.
 Stages are `baseline`, `intermediate`, `final`, and `unspecified`:
 
 ```sh
-agentledger test compare <baseline-id> <final-id>
-agentledger test compare --tracking-run <tracking-run-id>
-agentledger test compare --session <session-id>
+codeoutcome test compare <baseline-id> <final-id>
+codeoutcome test compare --tracking-run <tracking-run-id>
+codeoutcome test compare --session <session-id>
 ```
 
-For tracking-run or session comparison, AgentLedger chooses the earliest
+For tracking-run or session comparison, CodeOutcome chooses the earliest
 explicit baseline and latest explicit final. If stages are absent, it uses the
 earliest and latest eligible runs and marks the choice as inferred. One run
 cannot produce a delta.
@@ -97,16 +97,16 @@ it makes no causal claim about a Provider.
 `test run` canonicalizes the current directory and looks for active tracking
 runs in the same directory or Git worktree. A single reliable match is linked;
 no match becomes standalone; multiple matches become ambiguous and remain
-unlinked. `agentledger run codex` passes the new tracking ID to nested processes
-as `AGENTLEDGER_TRACKING_RUN_ID`. An existing value is preserved with a warning.
+unlinked. `codeoutcome run codex` passes the new tracking ID to nested processes
+as `CODEOUTCOME_TRACKING_RUN_ID`. An existing value is preserved with a warning.
 
 When a tracking run later links to an imported Provider session, its test runs
 with no session link are backfilled. Manual corrections are append-only:
 
 ```sh
-agentledger test link <test-run-id> --tracking-run <tracking-run-id>
-agentledger test link <test-run-id> --session <session-id>
-agentledger test unlink <test-run-id>
+codeoutcome test link <test-run-id> --tracking-run <tracking-run-id>
+codeoutcome test link <test-run-id> --session <session-id>
+codeoutcome test unlink <test-run-id>
 ```
 
 Automatic, manual, and unlink events remain in `test_run_links`. A future
@@ -128,12 +128,12 @@ AI replies, source code, and full Git diffs.
 
 ## Recovery and deletion
 
-An abnormal AgentLedger wrapper exit can leave a `running` row:
+An abnormal CodeOutcome wrapper exit can leave a `running` row:
 
 ```sh
-agentledger test recover --list
-agentledger test recover <test-run-id>
-agentledger test abandon <test-run-id>
+codeoutcome test recover --list
+codeoutcome test recover <test-run-id>
+codeoutcome test abandon <test-run-id>
 ```
 
 Recovery records an append-only event and leaves the unavailable exit code and
@@ -142,9 +142,9 @@ test counts as `NULL`. `doctor` warns about stale rows.
 Test metadata can be reviewed and deleted independently:
 
 ```sh
-agentledger data delete-tests --dry-run
-agentledger data delete-tests --before 2026-07-01 --dry-run
-agentledger data delete-tests --tracking-run <id> --yes
+codeoutcome data delete-tests --dry-run
+codeoutcome data delete-tests --before 2026-07-01 --dry-run
+codeoutcome data delete-tests --tracking-run <id> --yes
 ```
 
 Actual deletion requires `--yes`. It cascades only through test report, link,
@@ -153,7 +153,7 @@ runs, configuration, and original report files remain untouched.
 
 ## Current limits
 
-- AgentLedger records only explicitly wrapped commands and explicitly imported
+- CodeOutcome records only explicitly wrapped commands and explicitly imported
   reports; it cannot transparently see every command that Codex or Claude Code
   runs.
 - Human, editor, CI, and other tool activity can occur in the same tracking

@@ -6,16 +6,16 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "@agentledger/shared": ["packages/shared/src/index.ts"],
-      "@agentledger/shared/dashboard": ["packages/shared/src/dashboard.ts"],
-      "@agentledger/core": ["packages/core/src/index.ts"],
-      "@agentledger/adapter-claude-code": [
+      "@codeoutcome/shared": ["packages/shared/src/index.ts"],
+      "@codeoutcome/shared/dashboard": ["packages/shared/src/dashboard.ts"],
+      "@codeoutcome/core": ["packages/core/src/index.ts"],
+      "@codeoutcome/adapter-claude-code": [
         "packages/adapters/claude-code/src/index.ts"
       ],
-      "@agentledger/adapter-codex": ["packages/adapters/codex/src/index.ts"],
-      "@agentledger/database": ["packages/database/src/index.ts"],
-      "@agentledger/git-tracker": ["packages/git-tracker/src/index.ts"],
-      "@agentledger/dashboard-server": [
+      "@codeoutcome/adapter-codex": ["packages/adapters/codex/src/index.ts"],
+      "@codeoutcome/database": ["packages/database/src/index.ts"],
+      "@codeoutcome/git-tracker": ["packages/git-tracker/src/index.ts"],
+      "@codeoutcome/dashboard-server": [
         "packages/dashboard-server/src/index.ts"
       ]
     },

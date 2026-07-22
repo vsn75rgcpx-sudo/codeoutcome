@@ -41,31 +41,31 @@ importers:
 
   apps/cli:
     dependencies:
-      '@agentledger/adapter-claude-code':
+      '@codeoutcome/adapter-claude-code':
         specifier: workspace:*
         version: link:../../packages/adapters/claude-code
-      '@agentledger/adapter-codex':
+      '@codeoutcome/adapter-codex':
         specifier: workspace:*
         version: link:../../packages/adapters/codex
-      '@agentledger/core':
+      '@codeoutcome/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentledger/dashboard-server':
+      '@codeoutcome/dashboard-server':
         specifier: workspace:*
         version: link:../../packages/dashboard-server
-      '@agentledger/database':
+      '@codeoutcome/database':
         specifier: workspace:*
         version: link:../../packages/database
-      '@agentledger/git-tracker':
+      '@codeoutcome/git-tracker':
         specifier: workspace:*
         version: link:../../packages/git-tracker
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../../packages/shared
 
   apps/dashboard:
     dependencies:
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       react:
@@ -93,37 +93,37 @@ importers:
 
   packages/adapters/claude-code:
     dependencies:
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../../shared
 
   packages/adapters/codex:
     dependencies:
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../../shared
 
   packages/core:
     dependencies:
-      '@agentledger/database':
+      '@codeoutcome/database':
         specifier: workspace:*
         version: link:../database
-      '@agentledger/git-tracker':
+      '@codeoutcome/git-tracker':
         specifier: workspace:*
         version: link:../git-tracker
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../shared
 
   packages/dashboard-server:
     dependencies:
-      '@agentledger/core':
+      '@codeoutcome/core':
         specifier: workspace:*
         version: link:../core
-      '@agentledger/database':
+      '@codeoutcome/database':
         specifier: workspace:*
         version: link:../database
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../shared
       '@hono/node-server':
@@ -135,13 +135,13 @@ importers:
 
   packages/database:
     dependencies:
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../shared
 
   packages/git-tracker:
     dependencies:
-      '@agentledger/shared':
+      '@codeoutcome/shared':
         specifier: workspace:*
         version: link:../shared
 

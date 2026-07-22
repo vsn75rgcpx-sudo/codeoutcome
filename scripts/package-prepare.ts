@@ -1,9 +1,9 @@
 import { chmod, copyFile, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { AGENTLEDGER_VERSION } from "../packages/shared/src/index.js";
+import { CODEOUTCOME_VERSION } from "../packages/shared/src/index.js";
 
-const staging = path.resolve("artifacts/package/agentledger");
+const staging = path.resolve("artifacts/package/codeoutcome");
 await rm(staging, { recursive: true, force: true });
 await mkdir(path.join(staging, "apps/cli/dist"), { recursive: true });
 await mkdir(path.join(staging, "apps/dashboard"), { recursive: true });
@@ -23,13 +23,19 @@ for (const name of [
 }
 
 const manifest = {
-  name: "@agentledger/cli",
-  version: AGENTLEDGER_VERSION,
+  name: "codeoutcome",
+  version: CODEOUTCOME_VERSION,
   description:
     "Local-first Claude Code and OpenAI Codex session accounting and review",
   type: "module",
   license: "MIT",
-  bin: { agentledger: "apps/cli/dist/index.js" },
+  repository: {
+    type: "git",
+    url: "git+https://github.com/vsn75rgcpx-sudo/codeoutcome.git",
+  },
+  homepage: "https://github.com/vsn75rgcpx-sudo/codeoutcome#readme",
+  bugs: { url: "https://github.com/vsn75rgcpx-sudo/codeoutcome/issues" },
+  bin: { codeoutcome: "apps/cli/dist/index.js" },
   files: [
     "apps/cli/dist",
     "apps/dashboard/dist",

@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@agentledger/shared/dashboard": fileURLToPath(
+      "@codeoutcome/shared/dashboard": fileURLToPath(
         new URL("../../packages/shared/src/dashboard.ts", import.meta.url),
       ),
     },

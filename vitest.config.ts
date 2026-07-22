@@ -8,22 +8,22 @@ const fromRoot = (relativePath: string): string =>
 export default defineConfig({
   resolve: {
     alias: {
-      "@agentledger/shared/dashboard": fromRoot(
+      "@codeoutcome/shared/dashboard": fromRoot(
         "./packages/shared/src/dashboard.ts",
       ),
-      "@agentledger/shared": fromRoot("./packages/shared/src/index.ts"),
-      "@agentledger/core": fromRoot("./packages/core/src/index.ts"),
-      "@agentledger/adapter-claude-code": fromRoot(
+      "@codeoutcome/shared": fromRoot("./packages/shared/src/index.ts"),
+      "@codeoutcome/core": fromRoot("./packages/core/src/index.ts"),
+      "@codeoutcome/adapter-claude-code": fromRoot(
         "./packages/adapters/claude-code/src/index.ts",
       ),
-      "@agentledger/adapter-codex": fromRoot(
+      "@codeoutcome/adapter-codex": fromRoot(
         "./packages/adapters/codex/src/index.ts",
       ),
-      "@agentledger/database": fromRoot("./packages/database/src/index.ts"),
-      "@agentledger/git-tracker": fromRoot(
+      "@codeoutcome/database": fromRoot("./packages/database/src/index.ts"),
+      "@codeoutcome/git-tracker": fromRoot(
         "./packages/git-tracker/src/index.ts",
       ),
-      "@agentledger/dashboard-server": fromRoot(
+      "@codeoutcome/dashboard-server": fromRoot(
         "./packages/dashboard-server/src/index.ts",
       ),
     },

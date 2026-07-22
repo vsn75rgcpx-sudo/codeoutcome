@@ -4,8 +4,8 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { ClaudeCodeAdapter } from "@agentledger/adapter-claude-code";
-import { CodexAdapter } from "@agentledger/adapter-codex";
+import { ClaudeCodeAdapter } from "@codeoutcome/adapter-claude-code";
+import { CodexAdapter } from "@codeoutcome/adapter-codex";
 import {
   auditUsage,
   buildUsageReport,
@@ -18,21 +18,22 @@ import {
   type UsageReport,
   type UsageAuditReport,
   type UsageReconciliationReport,
-} from "@agentledger/core";
+} from "@codeoutcome/core";
 import {
-  getAgentLedgerPaths,
+  getCodeOutcomePaths,
   inspectDatabase,
   SessionDatabase,
-} from "@agentledger/database";
-import type { GitProcessRunner } from "@agentledger/git-tracker";
+  type CodeOutcomePaths,
+} from "@codeoutcome/database";
+import type { GitProcessRunner } from "@codeoutcome/git-tracker";
 import {
-  AGENTLEDGER_VERSION,
+  CODEOUTCOME_VERSION,
   redactHomePath,
   type Provider,
   type ProviderSelection,
   type Session,
   type SessionAdapter,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import { PHASE3_HELP, runPhase3Cli } from "./tracking-cli.js";
 import { runTestCli, TEST_HELP } from "./test-cli.js";
@@ -85,12 +86,53 @@ const defaultIo: CliIo = {
 function configuredPath(
   environment: NodeJS.ProcessEnv,
   environmentName: string,
+  legacyEnvironmentName: string,
   fallback: string,
 ): string {
-  const configured = environment[environmentName]?.trim();
+  const current = environment[environmentName]?.trim();
+  const legacy = environment[legacyEnvironmentName]?.trim();
+  const configured =
+    current !== undefined && current.length > 0 ? current : legacy;
   return configured === undefined || configured.length === 0
     ? fallback
     : path.resolve(configured);
+}
+
+const LEGACY_ENVIRONMENT_VARIABLES = [
+  ["AGENTLEDGER_DATA_DIR", "CODEOUTCOME_DATA_DIR"],
+  ["AGENTLEDGER_CLAUDE_LOG_DIR", "CODEOUTCOME_CLAUDE_LOG_DIR"],
+  ["AGENTLEDGER_CODEX_LOG_DIR", "CODEOUTCOME_CODEX_LOG_DIR"],
+  ["AGENTLEDGER_TRACKING_RUN_ID", "CODEOUTCOME_TRACKING_RUN_ID"],
+] as const;
+
+function warnForLegacyEnvironment(
+  environment: NodeJS.ProcessEnv,
+  io: CliIo,
+): void {
+  for (const [legacyName, currentName] of LEGACY_ENVIRONMENT_VARIABLES) {
+    const current = environment[currentName]?.trim();
+    const legacy = environment[legacyName]?.trim();
+    if (
+      (current === undefined || current.length === 0) &&
+      legacy !== undefined &&
+      legacy.length > 0
+    ) {
+      io.stderr(
+        `WARN: ${legacyName} is deprecated; use ${currentName} instead.`,
+      );
+    }
+  }
+}
+
+function warnForLegacyDataLocation(
+  paths: CodeOutcomePaths,
+  userHome: string,
+  io: CliIo,
+): void {
+  if (!paths.legacy) return;
+  io.stderr(
+    `WARN: Using legacy data location in compatibility mode (${redactHomePath(paths.databaseFile, userHome) ?? paths.databaseFile}). The database will not be moved or renamed automatically.`,
+  );
 }
 
 function defaultAdapters(
@@ -101,6 +143,7 @@ function defaultAdapters(
     new ClaudeCodeAdapter(
       configuredPath(
         environment,
+        "CODEOUTCOME_CLAUDE_LOG_DIR",
         "AGENTLEDGER_CLAUDE_LOG_DIR",
         path.join(userHome, ".claude", "projects"),
       ),
@@ -108,6 +151,7 @@ function defaultAdapters(
     new CodexAdapter(
       configuredPath(
         environment,
+        "CODEOUTCOME_CODEX_LOG_DIR",
         "AGENTLEDGER_CODEX_LOG_DIR",
         path.join(userHome, ".codex", "sessions"),
       ),
@@ -288,7 +332,7 @@ async function inspectLogRoot(
         status: "FAIL",
         detail: `Configured path is not a directory (${shownRoot})`,
         solution:
-          "Set the matching AGENTLEDGER_*_LOG_DIR to a readable directory.",
+          "Set the matching CODEOUTCOME_*_LOG_DIR to a readable directory.",
       };
     }
     await access(adapter.logRoot, constants.R_OK | constants.X_OK);
@@ -312,7 +356,7 @@ async function inspectLogRoot(
         check: `${adapter.provider} logs`,
         status: "WARN",
         detail: `Log directory does not exist (${shownRoot})`,
-        solution: `Run ${adapter.provider} once or set its AgentLedger log directory environment variable.`,
+        solution: `Run ${adapter.provider} once or set its CodeOutcome log directory environment variable.`,
       };
     }
     return {
@@ -378,7 +422,7 @@ async function doctorChecks(
     detail: `schema ${inspection.currentMigrationVersion}/${inspection.latestMigrationVersion}; ${inspection.pendingMigrations} pending`,
     solution:
       !inspection.exists || inspection.pendingMigrations > 0
-        ? "Run a writable command such as `agentledger git snapshot` or `agentledger import`; migrations are transactional."
+        ? "Run a writable command such as `codeoutcome git snapshot` or `codeoutcome import`; migrations are transactional."
         : null,
   });
   const dataDirectory = path.dirname(databaseFile);
@@ -391,7 +435,7 @@ async function doctorChecks(
       : `Not writable (${redacted(dataDirectory, userHome)})`,
     solution: writable
       ? null
-      : "Choose a writable AGENTLEDGER_DATA_DIR or correct directory permissions.",
+      : "Choose a writable CODEOUTCOME_DATA_DIR or correct directory permissions.",
   });
 
   checks.push(
@@ -431,7 +475,7 @@ async function doctorChecks(
         : `${latest.status} at ${latest.completedAt ?? latest.startedAt}; scanned ${latest.scannedFiles}, imported ${latest.importedSessions}, updated ${latest.updatedSessions}`,
     solution:
       latest === null || latest.status !== "completed"
-        ? "Review import warnings, then run `agentledger import` again."
+        ? "Review import warnings, then run `codeoutcome import` again."
         : null,
   });
   if (inspection.exists && inspection.pendingMigrations === 0) {
@@ -447,7 +491,7 @@ async function doctorChecks(
             : "No stale active tracking runs",
         solution:
           activeRuns > 0
-            ? "Run `agentledger track recover --list`, then recover or abandon the intended run."
+            ? "Run `codeoutcome track recover --list`, then recover or abandon the intended run."
             : null,
       });
       const runningTests = database.runningTestRunCount();
@@ -460,7 +504,7 @@ async function doctorChecks(
             : "No stale running test runs",
         solution:
           runningTests > 0
-            ? "Run `agentledger test recover --list`, then recover or abandon the intended test run."
+            ? "Run `codeoutcome test recover --list`, then recover or abandon the intended test run."
             : null,
       });
     } finally {
@@ -651,7 +695,7 @@ async function runSessionsCommand(
     context.io.stdout(JSON.stringify(safeSessions, null, 2));
   } else if (safeSessions.length === 0) {
     context.io.stdout(
-      "No persisted sessions found. Run `agentledger import` first.",
+      "No persisted sessions found. Run `codeoutcome import` first.",
     );
   } else {
     context.io.stdout(
@@ -723,7 +767,7 @@ async function runAuditUsageCommand(
   );
   const inspection = inspectDatabase(context.databaseFile);
   if (!inspection.exists) {
-    context.io.stdout("No database found. Run `agentledger import` first.");
+    context.io.stdout("No database found. Run `codeoutcome import` first.");
     return 0;
   }
   const providerValue = parsed.values.get("--provider");
@@ -827,7 +871,7 @@ async function runReconcileUsageCommand(
   );
   const inspection = inspectDatabase(context.databaseFile);
   if (!inspection.exists) {
-    context.io.stdout("No database found. Run `agentledger import` first.");
+    context.io.stdout("No database found. Run `codeoutcome import` first.");
     return 0;
   }
   const providerValue = parsed.values.get("--provider");
@@ -971,7 +1015,7 @@ async function runUsageCommand(
     context.io.stdout(JSON.stringify(report, null, 2));
   } else if (sessions.length === 0) {
     context.io.stdout(
-      "No persisted usage found. Run `agentledger import` first.",
+      "No persisted usage found. Run `codeoutcome import` first.",
     );
   } else {
     context.io.stdout(
@@ -990,21 +1034,21 @@ async function runUsageCommand(
 }
 
 function help(): string {
-  return `AgentLedger — local-first AI session, Git, and test result accounting
+  return `CodeOutcome — local-first AI session, Git, and test result accounting
 
 Usage:
-  agentledger --version
-  agentledger doctor [--json]
-  agentledger import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
-  agentledger audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
-  agentledger reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
-  agentledger sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
-  agentledger usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
+  codeoutcome --version
+  codeoutcome doctor [--json]
+  codeoutcome import [--provider claude-code|codex|all] [--dry-run] [--since 7d] [--json]
+  codeoutcome audit-usage [--provider claude-code|codex] [--session id] [--top 20] [--json]
+  codeoutcome reconcile-usage [--provider claude-code|codex] [--dry-run] [--json]
+  codeoutcome sessions [--provider claude-code|codex] [--since 7d] [--repo name-or-path] [--limit 20] [--json]
+  codeoutcome usage [--daily|--weekly|--monthly] [--provider claude-code|codex] [--since 30d] [--json]
 ${PHASE3_HELP}
 ${TEST_HELP}
 ${DASHBOARD_HELP}
 
-AgentLedger reads source logs without modifying them and never stores prompt,
+CodeOutcome reads source logs without modifying them and never stores prompt,
 response, source, or raw test output bodies.`;
 }
 
@@ -1017,17 +1061,26 @@ export async function runCli(
   const platform = options.platform ?? process.platform;
   const now = options.now ?? (() => new Date());
   const io = options.io ?? defaultIo;
+  warnForLegacyEnvironment(environment, io);
   if (arguments_[0] === "--version" || arguments_[0] === "-V") {
     if (arguments_.length !== 1) {
       throw new Error("--version does not accept additional arguments");
     }
-    io.stdout(AGENTLEDGER_VERSION);
+    io.stdout(CODEOUTCOME_VERSION);
     return 0;
   }
   const adapters = options.adapters ?? defaultAdapters(environment, userHome);
-  const databaseFile =
-    options.databaseFile ??
-    getAgentLedgerPaths(environment, userHome, platform).databaseFile;
+  const resolvedPaths =
+    options.databaseFile === undefined
+      ? getCodeOutcomePaths(environment, userHome, platform)
+      : null;
+  if (resolvedPaths !== null) {
+    warnForLegacyDataLocation(resolvedPaths, userHome, io);
+  }
+  const databaseFile = options.databaseFile ?? resolvedPaths?.databaseFile;
+  if (databaseFile === undefined) {
+    throw new Error("CodeOutcome database path could not be resolved");
+  }
   const dashboardResult = await runDashboardCli(arguments_, {
     io,
     databaseFile,

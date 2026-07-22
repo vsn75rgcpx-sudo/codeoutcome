@@ -2,12 +2,12 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
-import type { SessionDatabase } from "@agentledger/database";
+import type { SessionDatabase } from "@codeoutcome/database";
 import type {
   GitPrivacyMode,
   TestFramework,
   TestRun,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   detectTestFrameworkWithReason,

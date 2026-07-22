@@ -1,6 +1,6 @@
 # Redaction guide
 
-Never attach a real Provider log or AgentLedger database to an issue. Build the
+Never attach a real Provider log or CodeOutcome database to an issue. Build the
 smallest artificial reproduction from scratch.
 
 Remove or replace:
@@ -12,7 +12,7 @@ Remove or replace:
   secrets, and private hostnames;
 - raw test output, stack traces, test names, and proprietary dependencies.
 
-Use obvious values such as `demo-session-01`, `/agentledger-demo/atlas-cli`,
+Use obvious values such as `demo-session-01`, `/codeoutcome-demo/atlas-cli`,
 `example.invalid`, and repeated non-real commit characters. Preserve only field
 names, types, nesting, ordering, and minimal aggregate numbers needed to trigger
 the behavior. Search the finished fixture for your username, home path, company,

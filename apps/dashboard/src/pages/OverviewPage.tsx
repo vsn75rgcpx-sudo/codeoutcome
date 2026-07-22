@@ -4,7 +4,7 @@ import type {
   DashboardOverview,
   DashboardRange,
   DashboardTokenTrend,
-} from "@agentledger/shared/dashboard";
+} from "@codeoutcome/shared/dashboard";
 
 import { useApi } from "../api.js";
 import { useDashboard } from "../app.js";

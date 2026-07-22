@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe("deterministic demo database", () => {
   it("creates the complete synthetic Phase 4B dataset deterministically", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-demo-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-demo-"));
     directories.push(directory);
     const first = seedDemoDatabase(path.join(directory, "first.sqlite"));
     const second = seedDemoDatabase(path.join(directory, "second.sqlite"));
@@ -35,13 +35,13 @@ describe("deterministic demo database", () => {
   });
 
   it("contains no user names, home paths, prompts, responses, or source bodies", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-demo-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-demo-"));
     directories.push(directory);
     const databaseFile = path.join(directory, "demo.sqlite");
     seedDemoDatabase(databaseFile);
     const bytes = await readFile(databaseFile);
     const text = bytes.toString("utf8");
-    expect(text).toContain("agentledger-demo");
+    expect(text).toContain("codeoutcome-demo");
     expect(text).not.toContain(homedir());
     expect(text).not.toContain(userInfo().username);
     expect(text).not.toMatch(

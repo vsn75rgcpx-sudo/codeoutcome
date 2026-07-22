@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { TestRun } from "@agentledger/shared";
+import type { TestRun } from "@codeoutcome/shared";
 
 import { SessionDatabase } from "./index.js";
 
@@ -12,10 +12,10 @@ const temporaryDirectories: string[] = [];
 
 async function store(): Promise<SessionDatabase> {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-test-store-"),
+    path.join(tmpdir(), "codeoutcome-test-store-"),
   );
   temporaryDirectories.push(directory);
-  return new SessionDatabase(path.join(directory, "agentledger.sqlite"));
+  return new SessionDatabase(path.join(directory, "codeoutcome.sqlite"));
 }
 
 function testRun(overrides: Partial<TestRun> = {}): TestRun {

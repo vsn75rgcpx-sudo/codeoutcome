@@ -1,21 +1,21 @@
 {
-  "name": "@agentledger/cli",
+  "name": "@codeoutcome/cli",
   "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
   "bin": {
-    "agentledger": "./dist/index.js"
+    "codeoutcome": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
-    "@agentledger/adapter-claude-code": "workspace:*",
-    "@agentledger/adapter-codex": "workspace:*",
-    "@agentledger/core": "workspace:*",
-    "@agentledger/database": "workspace:*",
-    "@agentledger/dashboard-server": "workspace:*",
-    "@agentledger/git-tracker": "workspace:*",
-    "@agentledger/shared": "workspace:*"
+    "@codeoutcome/adapter-claude-code": "workspace:*",
+    "@codeoutcome/adapter-codex": "workspace:*",
+    "@codeoutcome/core": "workspace:*",
+    "@codeoutcome/database": "workspace:*",
+    "@codeoutcome/dashboard-server": "workspace:*",
+    "@codeoutcome/git-tracker": "workspace:*",
+    "@codeoutcome/shared": "workspace:*"
   }
 }

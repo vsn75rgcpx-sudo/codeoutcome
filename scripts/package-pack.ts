@@ -3,7 +3,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const staging = path.resolve("artifacts/package/agentledger");
+const staging = path.resolve("artifacts/package/codeoutcome");
 const destination = path.resolve("artifacts/package");
 await execFileAsync(
   "pnpm",

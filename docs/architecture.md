@@ -1,6 +1,6 @@
 # Architecture
 
-AgentLedger separates parsing, import/accounting, storage, repository discovery,
+CodeOutcome separates parsing, import/accounting, storage, repository discovery,
 and presentation:
 
 ```text
@@ -51,7 +51,7 @@ and WAL, and keep Token accounting rows separate from Git tracking rows.
 
 ## Dashboard read path
 
-`agentledger dashboard` selects loopback and a random port by default, creates a
+`codeoutcome dashboard` selects loopback and a random port by default, creates a
 random in-memory access token, then opens a dedicated SQLite connection with
 `readOnly: true` and `PRAGMA query_only=ON`. The API performs SQLite aggregation
 for Overview data and pages all entity lists; it does not return raw
@@ -60,7 +60,7 @@ diffs. Token integers cross the API as decimal strings so values above
 `Number.MAX_SAFE_INTEGER` remain exact.
 
 The initial HTML receives the per-process token in a fixed meta element. Browser
-requests send it in `X-AgentLedger-Dashboard-Token`; the server additionally
+requests send it in `X-CodeOutcome-Dashboard-Token`; the server additionally
 checks Host and any supplied Origin, sets a restrictive CSP and framing policy,
 and does not enable CORS. A restart invalidates the old token. API errors use a
 stable envelope and redact paths and SQL details.

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { DASHBOARD_TOKEN_HEADER } from "@agentledger/shared/dashboard";
+import { DASHBOARD_TOKEN_HEADER } from "@codeoutcome/shared/dashboard";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createDashboardTestDatabase } from "../test/test-database.js";
@@ -15,15 +15,15 @@ const temporaryDirectories: string[] = [];
 
 async function fixture() {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-dashboard-server-"),
+    path.join(tmpdir(), "codeoutcome-dashboard-server-"),
   );
   temporaryDirectories.push(directory);
-  const databaseFile = path.join(directory, "agentledger.sqlite");
+  const databaseFile = path.join(directory, "codeoutcome.sqlite");
   const staticRoot = path.join(directory, "dist");
   await mkdir(path.join(staticRoot, "assets"), { recursive: true });
   await writeFile(
     path.join(staticRoot, "index.html"),
-    '<!doctype html><meta name="agentledger-dashboard-token" content="__AGENTLEDGER_DASHBOARD_TOKEN__"><div id="root">AgentLedger</div>',
+    '<!doctype html><meta name="codeoutcome-dashboard-token" content="__CODEOUTCOME_DASHBOARD_TOKEN__"><div id="root">CodeOutcome</div>',
   );
   await writeFile(
     path.join(staticRoot, "assets", "app.js"),
@@ -153,7 +153,7 @@ describe("dashboard HTTP server", () => {
     ).toBe(404);
     const index = await (await fetch(server.url)).text();
     expect(index).toContain("test-token");
-    expect(index).not.toContain("__AGENTLEDGER_DASHBOARD_TOKEN__");
+    expect(index).not.toContain("__CODEOUTCOME_DASHBOARD_TOKEN__");
     expect((await fetch(`${server.url}/assets/app.js`)).status).toBe(200);
     const fallback = await fetch(`${server.url}/sessions/session-1`);
     expect(fallback.status).toBe(200);

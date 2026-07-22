@@ -5,7 +5,7 @@ import type {
   Session,
   SessionAdapter,
   UsageEvent,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import {
   accountUsageEvents,

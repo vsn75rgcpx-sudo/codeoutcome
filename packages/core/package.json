@@ -1,5 +1,5 @@
 {
-  "name": "@agentledger/core",
+  "name": "@codeoutcome/core",
   "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@agentledger/database": "workspace:*",
-    "@agentledger/git-tracker": "workspace:*",
-    "@agentledger/shared": "workspace:*"
+    "@codeoutcome/database": "workspace:*",
+    "@codeoutcome/git-tracker": "workspace:*",
+    "@codeoutcome/shared": "workspace:*"
   }
 }

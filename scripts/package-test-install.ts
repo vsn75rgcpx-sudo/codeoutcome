@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { AGENTLEDGER_VERSION } from "../packages/shared/src/index.js";
+import { CODEOUTCOME_VERSION } from "../packages/shared/src/index.js";
 
 const execFileAsync = promisify(execFile);
-const directory = await mkdtemp(path.join(tmpdir(), "agentledger-package-"));
+const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-package-"));
 const home = path.join(directory, "home");
 const data = path.join(directory, "data");
 const claude = path.join(directory, "claude-logs");
 const codex = path.join(directory, "codex-logs");
 const tarball = path.resolve(
-  `artifacts/package/agentledger-cli-${AGENTLEDGER_VERSION}.tgz`,
+  `artifacts/package/codeoutcome-${CODEOUTCOME_VERSION}.tgz`,
 );
 
 async function run(
@@ -47,9 +47,9 @@ await Promise.all(
 const environment = {
   ...process.env,
   HOME: home,
-  AGENTLEDGER_DATA_DIR: data,
-  AGENTLEDGER_CLAUDE_LOG_DIR: claude,
-  AGENTLEDGER_CODEX_LOG_DIR: codex,
+  CODEOUTCOME_DATA_DIR: data,
+  CODEOUTCOME_CLAUDE_LOG_DIR: claude,
+  CODEOUTCOME_CODEX_LOG_DIR: codex,
   NODE_PATH: "",
   NO_UPDATE_NOTIFIER: "1",
 };
@@ -57,7 +57,7 @@ const environment = {
 try {
   await writeFile(
     path.join(directory, "package.json"),
-    '{"name":"agentledger-package-smoke","private":true}\n',
+    '{"name":"codeoutcome-package-smoke","private":true}\n',
   );
   await run("npm", [
     "install",
@@ -66,7 +66,7 @@ try {
     "--no-fund",
     tarball,
   ]);
-  const binary = path.join(directory, "node_modules/.bin/agentledger");
+  const binary = path.join(directory, "node_modules/.bin/codeoutcome");
   const help = await run(binary, ["--help"]);
   const version = await run(binary, ["--version"]);
   const doctor = await run(binary, ["doctor"], true);
@@ -111,7 +111,7 @@ try {
   });
   const homeResponse = await fetch(dashboardUrl);
   const html = await homeResponse.text();
-  const token = /name="agentledger-dashboard-token"\s+content="([^"]+)"/.exec(
+  const token = /name="codeoutcome-dashboard-token"\s+content="([^"]+)"/.exec(
     html,
   )?.[1];
   if (
@@ -122,7 +122,7 @@ try {
     throw new Error("Installed package did not serve its Dashboard homepage");
   }
   const health = await fetch(new URL("/api/health", dashboardUrl), {
-    headers: { "x-agentledger-dashboard-token": token },
+    headers: { "x-codeoutcome-dashboard-token": token },
   });
   const healthBody = (await health.json()) as {
     data?: { status?: string };
@@ -146,7 +146,7 @@ try {
     "--ignore-scripts",
     "--no-audit",
     "--no-fund",
-    "@agentledger/cli",
+    "codeoutcome",
   ]);
 
   console.log(
@@ -154,7 +154,7 @@ try {
       {
         installedOutsideMonorepo: true,
         version: version.stdout.trim(),
-        help: help.stdout.includes("agentledger doctor"),
+        help: help.stdout.includes("codeoutcome doctor"),
         doctorExecuted: doctor.code === 0 || doctor.code === 1,
         dashboardHomepage: homeResponse.status,
         dashboardHealth: health.status,

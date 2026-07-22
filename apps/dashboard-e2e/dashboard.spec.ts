@@ -86,7 +86,7 @@ test("opens Session detail and survives a direct route refresh", async ({
   await expect(
     page.getByRole("heading", { name: "Session detail" }),
   ).toBeVisible();
-  await expect(page).toHaveTitle("Session detail · AgentLedger");
+  await expect(page).toHaveTitle("Session detail · CodeOutcome");
 });
 
 test("filters Tracking Runs and opens observed Git metadata", async ({
@@ -236,7 +236,7 @@ test("keeps API 404 separate from SPA fallback and enforces token and Origin", a
   request,
 }) => {
   const notFound = await request.get(`${runtime.url}/api/not-a-route`, {
-    headers: { "x-agentledger-dashboard-token": runtime.server.accessToken },
+    headers: { "x-codeoutcome-dashboard-token": runtime.server.accessToken },
   });
   expect(notFound.status()).toBe(404);
   expect(notFound.headers()["content-type"]).toContain("application/json");
@@ -244,7 +244,7 @@ test("keeps API 404 separate from SPA fallback and enforces token and Origin", a
   expect(
     (
       await request.get(`${runtime.url}/api/health`, {
-        headers: { "x-agentledger-dashboard-token": "wrong-demo-token" },
+        headers: { "x-codeoutcome-dashboard-token": "wrong-demo-token" },
       })
     ).status(),
   ).toBe(401);
@@ -252,7 +252,7 @@ test("keeps API 404 separate from SPA fallback and enforces token and Origin", a
     (
       await request.get(`${runtime.url}/api/health`, {
         headers: {
-          "x-agentledger-dashboard-token": runtime.server.accessToken,
+          "x-codeoutcome-dashboard-token": runtime.server.accessToken,
           origin: "http://invalid.example",
         },
       })
@@ -267,7 +267,7 @@ test("rejects an invalid Host on the production HTTP server", async () => {
       {
         headers: {
           host: "invalid.example",
-          "x-agentledger-dashboard-token": runtime.server.accessToken,
+          "x-codeoutcome-dashboard-token": runtime.server.accessToken,
         },
       },
       (response) => {
@@ -313,5 +313,5 @@ test("renders a semantic page-not-found state", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Page not found" }),
   ).toBeVisible();
-  await expect(page).toHaveTitle("Page not found · AgentLedger");
+  await expect(page).toHaveTitle("Page not found · CodeOutcome");
 });

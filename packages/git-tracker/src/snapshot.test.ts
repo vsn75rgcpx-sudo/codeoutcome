@@ -35,10 +35,10 @@ async function git(
 }
 
 async function repository(commit = true): Promise<string> {
-  const directory = await mkdtemp(path.join(tmpdir(), "agentledger-git-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-git-"));
   temporaryDirectories.push(directory);
   await git(directory, ["init", "-b", "main"]);
-  await git(directory, ["config", "user.name", "AgentLedger Test"]);
+  await git(directory, ["config", "user.name", "CodeOutcome Test"]);
   await git(directory, ["config", "user.email", "fixture@example.invalid"]);
   if (commit) {
     await writeFile(path.join(directory, "tracked.txt"), "initial\n", "utf8");
@@ -329,7 +329,7 @@ describe("Git privacy and failure behavior", () => {
   });
 
   it("returns a safe typed error outside a Git repository", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-nongit-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-nongit-"));
     temporaryDirectories.push(directory);
 
     await expect(snapshot(directory)).rejects.toBeInstanceOf(

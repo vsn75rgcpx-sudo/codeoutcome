@@ -1,12 +1,20 @@
 {
-  "name": "agentledger",
+  "name": "codeoutcome",
   "version": "0.1.0-alpha.1",
-  "description": "Local-first session review for Claude Code and OpenAI Codex",
+  "description": "Local-first outcome tracking for Claude Code and Codex sessions",
   "private": true,
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vsn75rgcpx-sudo/codeoutcome.git"
+  },
+  "homepage": "https://github.com/vsn75rgcpx-sudo/codeoutcome#readme",
+  "bugs": {
+    "url": "https://github.com/vsn75rgcpx-sudo/codeoutcome/issues"
+  },
   "bin": {
-    "agentledger": "./apps/cli/dist/index.js"
+    "codeoutcome": "./apps/cli/dist/index.js"
   },
   "scripts": {
     "build": "tsc -b && pnpm dashboard:build",
@@ -17,10 +25,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "dashboard:dev": "pnpm dashboard:build && pnpm cli dashboard --no-open",
-    "dashboard:build": "pnpm --filter @agentledger/dashboard build",
+    "dashboard:build": "pnpm --filter @codeoutcome/dashboard build",
     "dashboard:test": "vitest run packages/dashboard-server apps/dashboard apps/cli/src/dashboard-cli.test.ts",
     "demo:seed": "tsx scripts/demo-seed.ts",
-    "demo:dashboard": "pnpm demo:seed && pnpm dashboard:build && AGENTLEDGER_DATA_DIR=$PWD/artifacts/demo pnpm cli dashboard --no-open",
+    "demo:dashboard": "pnpm demo:seed && pnpm dashboard:build && CODEOUTCOME_DATA_DIR=$PWD/artifacts/demo pnpm cli dashboard --no-open",
     "demo:smoke": "pnpm demo:seed && pnpm dashboard:build && tsx scripts/demo-dashboard-smoke.ts",
     "demo:screenshots": "pnpm dashboard:build && tsx scripts/demo-screenshots.ts",
     "e2e": "pnpm dashboard:build && playwright test",

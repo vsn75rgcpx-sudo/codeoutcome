@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ClaudeCodeAdapter } from "@agentledger/adapter-claude-code";
+import { ClaudeCodeAdapter } from "@codeoutcome/adapter-claude-code";
 
 import { runCli, type CliIo } from "./cli.js";
 
@@ -38,8 +38,24 @@ describe("CLI JSON output", () => {
     expect(output.stdout).toEqual(["0.1.0-alpha.1"]);
   });
 
+  it("warns without exposing values when a legacy environment name is used", async () => {
+    const output = memoryIo();
+    expect(
+      await runCli(["--version"], {
+        environment: {
+          AGENTLEDGER_CLAUDE_LOG_DIR: "/private/legacy-logs",
+        },
+        io: output.io,
+      }),
+    ).toBe(0);
+    expect(output.stderr).toEqual([
+      "WARN: AGENTLEDGER_CLAUDE_LOG_DIR is deprecated; use CODEOUTCOME_CLAUDE_LOG_DIR instead.",
+    ]);
+    expect(output.stderr.join("\n")).not.toContain("/private/legacy-logs");
+  });
+
   it("imports private logs and emits metadata-only sessions and weekly usage", async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "agentledger-cli-"));
+    const directory = await mkdtemp(path.join(tmpdir(), "codeoutcome-cli-"));
     temporaryDirectories.push(directory);
     const logs = path.join(directory, "logs");
     await mkdir(logs);
@@ -61,7 +77,7 @@ describe("CLI JSON output", () => {
       })}\n`,
       "utf8",
     );
-    const databaseFile = path.join(directory, "agentledger.sqlite");
+    const databaseFile = path.join(directory, "codeoutcome.sqlite");
     const adapter = new ClaudeCodeAdapter(logs);
     const clock = () => new Date("2026-01-15T00:00:00.000Z");
 

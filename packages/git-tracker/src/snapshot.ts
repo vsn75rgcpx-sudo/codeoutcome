@@ -12,7 +12,7 @@ import {
   type GitPrivacyMode,
   type GitSnapshot,
   type GitSnapshotTrigger,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 export interface GitProcessResult {
   exitCode: number;

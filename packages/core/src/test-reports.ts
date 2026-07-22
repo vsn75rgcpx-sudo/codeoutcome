@@ -5,7 +5,7 @@ import path from "node:path";
 import type {
   SessionDatabase,
   SaveTestReportResult,
-} from "@agentledger/database";
+} from "@codeoutcome/database";
 import {
   asRecord,
   type GitPrivacyMode,
@@ -16,7 +16,7 @@ import {
   type TestReportImport,
   type TestRun,
   type TestRunLink,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 import { resolveTestAssociation } from "./test-tracking.js";
 

@@ -3,8 +3,8 @@ import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { SessionDatabase } from "@agentledger/database";
-import type { CapturedGitSnapshot } from "@agentledger/shared";
+import { SessionDatabase } from "@codeoutcome/database";
+import type { CapturedGitSnapshot } from "@codeoutcome/shared";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -17,14 +17,14 @@ const temporaryDirectories: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-test-command-"),
+    path.join(tmpdir(), "codeoutcome-test-command-"),
   );
   temporaryDirectories.push(directory);
   return directory;
 }
 
 function database(directory: string): SessionDatabase {
-  return new SessionDatabase(path.join(directory, "agentledger.sqlite"));
+  return new SessionDatabase(path.join(directory, "codeoutcome.sqlite"));
 }
 
 function snapshot(workingDirectory: string): CapturedGitSnapshot {

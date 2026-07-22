@@ -2,7 +2,7 @@
 
 ## Our pledge
 
-We pledge to make participation in AgentLedger a harassment-free experience for
+We pledge to make participation in CodeOutcome a harassment-free experience for
 everyone, regardless of background, identity, experience, or ability. We value
 curiosity, precise technical disagreement, privacy, and respect.
 

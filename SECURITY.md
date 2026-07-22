@@ -16,7 +16,7 @@ version, and impact. Allow maintainers time to acknowledge and investigate
 before public disclosure.
 
 Never submit real Provider JSONL, Prompt/response content, source code, API keys,
-tokens, cookies, `.env` files, or an AgentLedger database. Use a manually
+tokens, cookies, `.env` files, or a CodeOutcome database. Use a manually
 constructed redacted fixture and review `doctor --json` output for paths before
 sharing it.
 
@@ -24,4 +24,4 @@ sharing it.
 
 The Dashboard is designed only for localhost. It is not supported behind a
 reverse proxy, on a LAN address, through port forwarding, or on a shared host.
-AgentLedger does not auto-update and performs no remote version check.
+CodeOutcome does not auto-update and performs no remote version check.

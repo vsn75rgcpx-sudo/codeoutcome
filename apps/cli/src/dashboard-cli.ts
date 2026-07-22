@@ -3,13 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { readAgentLedgerConfig } from "@agentledger/core";
-import { AGENTLEDGER_VERSION } from "@agentledger/shared";
+import { readCodeOutcomeConfig } from "@codeoutcome/core";
+import { CODEOUTCOME_VERSION } from "@codeoutcome/shared";
 import {
   startDashboardServer,
   type RunningDashboardServer,
   type StartDashboardServerOptions,
-} from "@agentledger/dashboard-server";
+} from "@codeoutcome/dashboard-server";
 
 const execFileAsync = promisify(execFile);
 
@@ -88,6 +88,18 @@ function defaultStaticRoot(): string {
   return fileURLToPath(new URL("../../dashboard/dist/", import.meta.url));
 }
 
+function configuredLogDirectory(
+  environment: NodeJS.ProcessEnv,
+  currentName: string,
+  legacyName: string,
+  fallback: string,
+): string {
+  const current = environment[currentName]?.trim();
+  if (current !== undefined && current.length > 0) return current;
+  const legacy = environment[legacyName]?.trim();
+  return legacy !== undefined && legacy.length > 0 ? legacy : fallback;
+}
+
 export async function runDashboardCli(
   arguments_: readonly string[],
   context: DashboardCliContext,
@@ -95,18 +107,24 @@ export async function runDashboardCli(
   const [command, ...rest] = arguments_;
   if (command !== "dashboard") return null;
   const parsed = parse(rest);
-  const config = await readAgentLedgerConfig(context.dataDirectory);
+  const config = await readCodeOutcomeConfig(context.dataDirectory);
   const server = await (context.startServer ?? startDashboardServer)({
     databaseFile: context.databaseFile,
     privacyMode: config.privacy,
     userHome: context.userHome,
-    claudeLogDirectory:
-      context.environment.AGENTLEDGER_CLAUDE_LOG_DIR ??
+    claudeLogDirectory: configuredLogDirectory(
+      context.environment,
+      "CODEOUTCOME_CLAUDE_LOG_DIR",
+      "AGENTLEDGER_CLAUDE_LOG_DIR",
       path.join(context.userHome, ".claude", "projects"),
-    codexLogDirectory:
-      context.environment.AGENTLEDGER_CODEX_LOG_DIR ??
+    ),
+    codexLogDirectory: configuredLogDirectory(
+      context.environment,
+      "CODEOUTCOME_CODEX_LOG_DIR",
+      "AGENTLEDGER_CODEX_LOG_DIR",
       path.join(context.userHome, ".codex", "sessions"),
-    version: AGENTLEDGER_VERSION,
+    ),
+    version: CODEOUTCOME_VERSION,
     host: parsed.host,
     port: parsed.port,
     staticRoot: context.staticRoot ?? defaultStaticRoot(),
@@ -125,7 +143,7 @@ export async function runDashboardCli(
           null,
           2,
         )
-      : `AgentLedger Dashboard: ${server.url}\nDatabase mode: read-only`,
+      : `CodeOutcome Dashboard: ${server.url}\nDatabase mode: read-only`,
   );
   if (!parsed.noOpen) {
     try {
@@ -156,4 +174,4 @@ export async function runDashboardCli(
   return 0;
 }
 
-export const DASHBOARD_HELP = `  agentledger dashboard [--no-open] [--port 4567] [--host 127.0.0.1] [--json]`;
+export const DASHBOARD_HELP = `  codeoutcome dashboard [--no-open] [--port 4567] [--host 127.0.0.1] [--json]`;

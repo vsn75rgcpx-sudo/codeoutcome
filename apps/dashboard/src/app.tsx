@@ -41,7 +41,7 @@ export function useDashboard(): DashboardContextValue {
 }
 
 function initialTheme(): ThemePreference {
-  const stored = localStorage.getItem("agentledger-theme");
+  const stored = localStorage.getItem("codeoutcome-theme");
   return stored === "light" || stored === "dark" ? stored : "system";
 }
 
@@ -66,7 +66,7 @@ function RouteTitle() {
                     : location.pathname === "/diagnostics"
                       ? "Diagnostics"
                       : "Page not found";
-    document.title = `${label} · AgentLedger`;
+    document.title = `${label} · CodeOutcome`;
   }, [location.pathname]);
   return null;
 }
@@ -77,7 +77,7 @@ export default function App() {
   const [refreshSeconds, setRefreshSeconds] = useState(0);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("agentledger-theme", theme);
+    localStorage.setItem("codeoutcome-theme", theme);
   }, [theme]);
   useEffect(() => {
     if (refreshSeconds < 30) return undefined;
@@ -102,15 +102,11 @@ export default function App() {
       </a>
       <div className="app-shell">
         <aside className="sidebar">
-          <div className="brand" aria-label="AgentLedger local dashboard">
-            <span className="brand-mark" aria-hidden="true">
-              AL
-            </span>
-            <div>
-              <strong>AgentLedger</strong>
-              <small>Local read-only view</small>
-            </div>
+          <div className="brand" aria-label="CodeOutcome local dashboard">
+            <strong>CodeOutcome</strong>
+            <small>Local workspace</small>
           </div>
+          <p className="nav-label">Workspace</p>
           <nav aria-label="Primary navigation">
             <NavLink to="/" end>
               Overview
@@ -127,7 +123,10 @@ export default function App() {
         </aside>
         <div className="content-shell">
           <header className="topbar">
-            <p>Local usage, observed changes, and recorded tests</p>
+            <p className="topbar-context">
+              <span className="presence-dot" aria-hidden="true" />
+              Read-only · this Mac
+            </p>
             <div className="topbar-actions">
               <label>
                 <span className="sr-only">Automatic refresh interval</span>
@@ -147,7 +146,7 @@ export default function App() {
                 onClick={() => setTheme((value) => nextTheme(value))}
                 aria-label={`Theme: ${theme}. Activate to change theme.`}
               >
-                Theme · {theme}
+                Appearance · {theme}
               </button>
             </div>
           </header>

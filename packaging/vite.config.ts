@@ -4,10 +4,10 @@ import path from "node:path";
 export default {
   plugins: [
     {
-      name: "agentledger-cli-executable",
+      name: "codeoutcome-cli-executable",
       closeBundle() {
         chmodSync(
-          path.resolve("artifacts/package/agentledger/apps/cli/dist/index.js"),
+          path.resolve("artifacts/package/codeoutcome/apps/cli/dist/index.js"),
           0o755,
         );
       },
@@ -16,7 +16,7 @@ export default {
   build: {
     target: "node22",
     ssr: true,
-    outDir: path.resolve("artifacts/package/agentledger/apps/cli/dist"),
+    outDir: path.resolve("artifacts/package/codeoutcome/apps/cli/dist"),
     emptyOutDir: true,
     minify: false,
     sourcemap: false,

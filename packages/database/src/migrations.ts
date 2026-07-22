@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import { stableSessionId, type Provider } from "@agentledger/shared";
+import { stableSessionId, type Provider } from "@codeoutcome/shared";
 
 interface Migration {
   version: number;

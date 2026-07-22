@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { SessionDatabase } from "@agentledger/database";
+import { SessionDatabase } from "@codeoutcome/database";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DashboardDataError, DashboardStore } from "./store.js";
@@ -13,7 +13,7 @@ const temporaryDirectories: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(
-    path.join(tmpdir(), "agentledger-dashboard-"),
+    path.join(tmpdir(), "codeoutcome-dashboard-"),
   );
   temporaryDirectories.push(directory);
   return directory;

@@ -59,7 +59,7 @@ test("strict privacy never exposes Demo paths or full commands", async ({
       page.getByText("vitest run --demo", { exact: true }),
     ).toHaveCount(0);
     expect(
-      (await page.locator("body").innerText()).includes("/agentledger-demo/"),
+      (await page.locator("body").innerText()).includes("/codeoutcome-demo/"),
     ).toBe(false);
   } finally {
     await runtime.close();

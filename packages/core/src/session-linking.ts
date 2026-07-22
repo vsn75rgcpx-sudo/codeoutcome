@@ -3,7 +3,7 @@ import type {
   LinkConfidenceLevel,
   Session,
   TrackingRun,
-} from "@agentledger/shared";
+} from "@codeoutcome/shared";
 
 export const SESSION_LINK_SCORING = {
   weights: {

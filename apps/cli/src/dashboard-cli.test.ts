@@ -5,7 +5,7 @@ import path from "node:path";
 import type {
   RunningDashboardServer,
   StartDashboardServerOptions,
-} from "@agentledger/dashboard-server";
+} from "@codeoutcome/dashboard-server";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { runCli, type CliIo } from "./cli.js";
@@ -47,7 +47,7 @@ function resolvedServer(): RunningDashboardServer {
 
 async function directory(): Promise<string> {
   const value = await mkdtemp(
-    path.join(tmpdir(), "agentledger-dashboard-cli-"),
+    path.join(tmpdir(), "codeoutcome-dashboard-cli-"),
   );
   temporaryDirectories.push(value);
   return value;
@@ -61,7 +61,7 @@ describe("dashboard CLI", () => {
     const opened: string[] = [];
     expect(
       await runCli(["dashboard", "--json"], {
-        databaseFile: path.join(dataDirectory, "agentledger.sqlite"),
+        databaseFile: path.join(dataDirectory, "codeoutcome.sqlite"),
         userHome: dataDirectory,
         io: output.io,
         dashboardStarter: async (options) => {
@@ -99,7 +99,7 @@ describe("dashboard CLI", () => {
         "--json",
       ],
       {
-        databaseFile: path.join(dataDirectory, "agentledger.sqlite"),
+        databaseFile: path.join(dataDirectory, "codeoutcome.sqlite"),
         userHome: dataDirectory,
         io: output.io,
         dashboardStarter: async (options) => {
@@ -133,7 +133,7 @@ describe("dashboard CLI", () => {
     };
     const listenersBefore = process.listenerCount("SIGINT");
     const running = runCli(["dashboard", "--no-open"], {
-      databaseFile: path.join(dataDirectory, "agentledger.sqlite"),
+      databaseFile: path.join(dataDirectory, "codeoutcome.sqlite"),
       userHome: dataDirectory,
       io: output.io,
       dashboardStarter: async () => server,
@@ -152,7 +152,7 @@ describe("dashboard CLI", () => {
     const dataDirectory = await directory();
     await expect(
       runCli(["dashboard", "--port", "70000"], {
-        databaseFile: path.join(dataDirectory, "agentledger.sqlite"),
+        databaseFile: path.join(dataDirectory, "codeoutcome.sqlite"),
         userHome: dataDirectory,
       }),
     ).rejects.toThrow("--port must be an integer between 0 and 65535");

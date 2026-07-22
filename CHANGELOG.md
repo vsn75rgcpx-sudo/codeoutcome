@@ -1,18 +1,21 @@
 # Changelog
 
-All notable changes to AgentLedger are recorded here. The project follows
+All notable changes to CodeOutcome are recorded here. The project follows
 semantic versioning once a public release exists.
 
-## 0.1.0-alpha.1 — unreleased
+## 0.1.0-alpha.1 — 2026-07-22
 
-Initial alpha release candidate:
+Initial source alpha:
 
-- local-only Claude Code and Codex session import and Token accounting;
-- observed Git session tracking and aggregate test-result tracking;
+- local-first Claude Code and Codex session import;
+- canonical Token accounting with cumulative/incremental reconciliation;
+- observed Git session changes without source bodies or full diffs;
+- explicitly recorded aggregate test results and comparisons;
 - read-only localhost Dashboard with strict privacy projection;
 - deterministic synthetic Demo data, browser E2E, and accessibility checks;
-- a locally verifiable single-package CLI tarball.
+- a locally verifiable single-package CLI tarball and checksum.
 
 This is alpha software. Log formats and normalized metadata may change. The
-Dashboard is local-only and read-only. No npm package or GitHub Release has been
-published yet.
+Dashboard is local-only and read-only. There is no telemetry or cloud upload,
+and the release does not claim exact AI authorship attribution. Provider formats
+may change without notice. The package is not published to npm.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AccountingRole, UsageEvent } from "@agentledger/shared";
+import type { AccountingRole, UsageEvent } from "@codeoutcome/shared";
 
 import { analyzeUsageEvents } from "./accounting.js";
 
