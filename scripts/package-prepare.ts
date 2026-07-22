@@ -35,6 +35,7 @@ const manifest = {
   },
   homepage: "https://github.com/vsn75rgcpx-sudo/codeoutcome#readme",
   bugs: { url: "https://github.com/vsn75rgcpx-sudo/codeoutcome/issues" },
+  publishConfig: { access: "public", tag: "latest" },
   bin: { codeoutcome: "apps/cli/dist/index.js" },
   files: [
     "apps/cli/dist",
@@ -45,6 +46,7 @@ const manifest = {
     "CHANGELOG.md",
   ],
   engines: { node: ">=22.13" },
+  os: ["darwin", "linux"],
   keywords: [
     "claude-code",
     "codex",

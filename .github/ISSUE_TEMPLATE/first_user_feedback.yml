@@ -1,0 +1,68 @@
+name: First-use feedback
+description: Optional feedback about installation and the first useful result
+title: "[First use] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for trying CodeOutcome. Submission is completely optional. GitHub displays your account, so this public form is not anonymous transport.
+
+        Never attach Provider logs, a CodeOutcome database, prompts, source code, credentials, session IDs, or complete local paths. Manually remove private details from errors before posting.
+  - type: dropdown
+    id: install
+    attributes:
+      label: Did installation succeed?
+      options:
+        - Yes
+        - No
+    validations:
+      required: true
+  - type: dropdown
+    id: import
+    attributes:
+      label: Did the selected Provider import succeed?
+      options:
+        - Yes
+        - Partially
+        - No
+        - I did not import
+    validations:
+      required: true
+  - type: dropdown
+    id: clarity
+    attributes:
+      label: Was the first useful result obvious?
+      options:
+        - "5 — immediately clear"
+        - "4"
+        - "3"
+        - "2"
+        - "1 — not clear"
+    validations:
+      required: true
+  - type: dropdown
+    id: return
+    attributes:
+      label: Would you open CodeOutcome again tomorrow?
+      options:
+        - Yes
+        - Maybe
+        - No
+    validations:
+      required: true
+  - type: textarea
+    id: blocker
+    attributes:
+      label: First confusing or failing step
+      description: Use a synthetic or manually redacted example only.
+      placeholder: The first step that slowed me down was…
+    validations:
+      required: false
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I reviewed this report and did not include private logs, databases, prompts, source code, credentials, session IDs, or complete paths.
+          required: true

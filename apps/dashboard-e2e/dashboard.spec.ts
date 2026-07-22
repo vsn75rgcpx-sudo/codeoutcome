@@ -155,7 +155,7 @@ test("shows read-only Diagnostics and the unified alpha version", async ({
   await expect(
     page.getByRole("heading", { name: "Diagnostics" }),
   ).toBeVisible();
-  await expect(page.getByText("0.1.0-alpha.1")).toBeVisible();
+  await expect(page.getByText("0.1.0-alpha.2")).toBeVisible();
   await expect(page.getByText("enabled", { exact: true })).toHaveCount(2);
   await expect(page.getByText("ok", { exact: true })).toBeVisible();
 });

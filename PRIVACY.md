@@ -24,6 +24,11 @@ CodeOutcome does not store Prompt or response bodies, source code, full diffs,
 raw test output, stack traces, test case bodies, shell environment variables,
 API keys, cookies, access tokens, or unredacted secret-like command arguments.
 
+`codeoutcome feedback` prints an identifier-free questionnaire locally. It
+does not read the database, inspect Provider logs, create a network request, or
+submit anything. The optional GitHub form is public and the GitHub account is
+visible; users choose whether and what to copy.
+
 ## Privacy modes
 
 `git-metadata` stores repository-relative changed paths and sanitized command
@@ -43,3 +48,7 @@ Stop CodeOutcome first. After making any wanted backup, delete the local
 `config.json` files from the CodeOutcome data directory. Uninstalling the CLI
 does not delete local data automatically. Never attach a real database or raw
 Provider log to a public issue.
+
+The legacy migration command reads only the SQLite database and creates a
+verified copy plus backup. It does not read Provider logs during migration and
+does not delete or rewrite the legacy database.

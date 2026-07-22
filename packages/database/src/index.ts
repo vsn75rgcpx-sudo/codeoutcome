@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { accessSync, constants, existsSync, mkdirSync } from "node:fs";
+import { chmod, copyFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import * as sqlite from "node:sqlite";
@@ -53,6 +54,23 @@ export interface CodeOutcomePaths {
   legacy: boolean;
 }
 
+export interface LegacyMigrationPaths {
+  legacyDataDirectory: string;
+  legacyDatabaseFile: string;
+  currentDataDirectory: string;
+  currentDatabaseFile: string;
+}
+
+export interface LegacyMigrationResult extends LegacyMigrationPaths {
+  dryRun: boolean;
+  canMigrate: boolean;
+  migrated: boolean;
+  backupFile: string | null;
+  legacyMigrationVersion: number;
+  targetMigrationVersion: number;
+  reasons: string[];
+}
+
 export interface ImportRunSummary {
   scannedFiles: number;
   importedSessions: number;
@@ -101,6 +119,12 @@ export interface SourceFileState {
   malformedLines: number;
   truncated: boolean;
   lastImportedAt: string;
+}
+
+export interface SourceFormatCount {
+  provider: Provider;
+  format: string;
+  files: number;
 }
 
 export interface RepositoryInput {
@@ -995,7 +1019,7 @@ export function getCodeOutcomePaths(
     legacyDataDirectory,
     "agentledger.sqlite",
   );
-  if (!existsSync(dataDirectory) && existsSync(legacyDatabaseFile)) {
+  if (!existsSync(databaseFile) && existsSync(legacyDatabaseFile)) {
     return {
       dataDirectory: legacyDataDirectory,
       databaseFile: legacyDatabaseFile,
@@ -1008,6 +1032,57 @@ export function getCodeOutcomePaths(
     databaseFile,
     source: "current-default",
     legacy: false,
+  };
+}
+
+export function getLegacyMigrationPaths(
+  environment: NodeJS.ProcessEnv = process.env,
+  userHome = homedir(),
+  platform = process.platform,
+): LegacyMigrationPaths {
+  const configuredCurrent = environment.CODEOUTCOME_DATA_DIR?.trim();
+  const configuredLegacy = environment.AGENTLEDGER_DATA_DIR?.trim();
+  let currentDataDirectory: string;
+  let legacyDataDirectory: string;
+  if (configuredCurrent !== undefined && configuredCurrent.length > 0) {
+    currentDataDirectory = path.resolve(configuredCurrent);
+  } else if (platform === "darwin") {
+    currentDataDirectory = path.join(
+      userHome,
+      "Library",
+      "Application Support",
+      "CodeOutcome",
+    );
+  } else {
+    const xdgDataHome = environment.XDG_DATA_HOME?.trim();
+    const dataHome =
+      xdgDataHome !== undefined && xdgDataHome.length > 0
+        ? path.resolve(xdgDataHome)
+        : path.join(userHome, ".local", "share");
+    currentDataDirectory = path.join(dataHome, "codeoutcome");
+  }
+  if (configuredLegacy !== undefined && configuredLegacy.length > 0) {
+    legacyDataDirectory = path.resolve(configuredLegacy);
+  } else if (platform === "darwin") {
+    legacyDataDirectory = path.join(
+      userHome,
+      "Library",
+      "Application Support",
+      "AgentLedger",
+    );
+  } else {
+    const xdgDataHome = environment.XDG_DATA_HOME?.trim();
+    const dataHome =
+      xdgDataHome !== undefined && xdgDataHome.length > 0
+        ? path.resolve(xdgDataHome)
+        : path.join(userHome, ".local", "share");
+    legacyDataDirectory = path.join(dataHome, "agentledger");
+  }
+  return {
+    legacyDataDirectory,
+    legacyDatabaseFile: path.join(legacyDataDirectory, "agentledger.sqlite"),
+    currentDataDirectory,
+    currentDatabaseFile: path.join(currentDataDirectory, "codeoutcome.sqlite"),
   };
 }
 
@@ -1128,6 +1203,111 @@ export async function backupDatabase(
   } finally {
     database.close();
   }
+  await chmod(backupFile, 0o600);
+}
+
+function migrationBackupName(now: Date): string {
+  const timestamp = now.toISOString().replaceAll(/[-:.]/g, "");
+  return `agentledger-before-codeoutcome-${timestamp}.sqlite`;
+}
+
+export async function migrateLegacyDatabase(options: {
+  environment?: NodeJS.ProcessEnv;
+  userHome?: string;
+  platform?: NodeJS.Platform;
+  dryRun?: boolean;
+  now?: () => Date;
+}): Promise<LegacyMigrationResult> {
+  const paths = getLegacyMigrationPaths(
+    options.environment,
+    options.userHome,
+    options.platform,
+  );
+  const dryRun = options.dryRun ?? false;
+  const reasons: string[] = [];
+  if (!existsSync(paths.legacyDatabaseFile)) {
+    reasons.push("Legacy AgentLedger database was not found");
+  }
+  if (existsSync(paths.currentDatabaseFile)) {
+    reasons.push("CodeOutcome destination database already exists");
+  }
+  if (
+    path.resolve(paths.legacyDatabaseFile) ===
+    path.resolve(paths.currentDatabaseFile)
+  ) {
+    reasons.push("Legacy and destination database paths are identical");
+  }
+  const legacyInspection = inspectDatabase(paths.legacyDatabaseFile);
+  if (existsSync(paths.legacyDatabaseFile) && !legacyInspection.ok) {
+    reasons.push(`Legacy database is not healthy: ${legacyInspection.message}`);
+  }
+  const result: LegacyMigrationResult = {
+    ...paths,
+    dryRun,
+    canMigrate: reasons.length === 0,
+    migrated: false,
+    backupFile: null,
+    legacyMigrationVersion: legacyInspection.currentMigrationVersion,
+    targetMigrationVersion: LATEST_MIGRATION_VERSION,
+    reasons,
+  };
+  if (dryRun || reasons.length > 0) return result;
+
+  const now = options.now ?? (() => new Date());
+  const backupFile = path.join(
+    paths.currentDataDirectory,
+    "backups",
+    migrationBackupName(now()),
+  );
+  const stagingFile = `${paths.currentDatabaseFile}.migrating-${randomUUID()}`;
+  try {
+    await backupDatabase(paths.legacyDatabaseFile, backupFile, {
+      forcePortableBackup: true,
+    });
+    const backupInspection = inspectDatabase(backupFile);
+    if (!backupInspection.ok) {
+      throw new Error(
+        `Legacy backup verification failed: ${backupInspection.message}`,
+      );
+    }
+
+    await backupDatabase(paths.legacyDatabaseFile, stagingFile, {
+      forcePortableBackup: true,
+    });
+    const migrated = new SessionDatabase(stagingFile);
+    try {
+      if (migrated.quickCheck() !== "ok") {
+        throw new Error("Migrated database quick_check failed");
+      }
+      if (migrated.migrationVersion() !== LATEST_MIGRATION_VERSION) {
+        throw new Error("Migrated database schema is not current");
+      }
+    } finally {
+      migrated.close();
+    }
+    await copyFile(
+      stagingFile,
+      paths.currentDatabaseFile,
+      constants.COPYFILE_EXCL,
+    );
+    await chmod(paths.currentDatabaseFile, 0o600);
+    const currentInspection = inspectDatabase(paths.currentDatabaseFile);
+    if (!currentInspection.ok || currentInspection.pendingMigrations > 0) {
+      throw new Error(
+        `CodeOutcome destination verification failed: ${currentInspection.message}`,
+      );
+    }
+    return {
+      ...result,
+      canMigrate: true,
+      migrated: true,
+      backupFile,
+    };
+  } finally {
+    await rm(stagingFile, { force: true });
+    await rm(`${stagingFile}-wal`, { force: true });
+    await rm(`${stagingFile}-shm`, { force: true });
+  }
 }
 
 export class SessionDatabase {
@@ -1234,6 +1414,29 @@ export class SessionDatabase {
       truncated: safeNumber(row.truncated) === 1,
       lastImportedAt: requiredString(row.last_imported_at, ""),
     };
+  }
+
+  listSourceFormatCounts(): SourceFormatCount[] {
+    return (
+      this.#database
+        .prepare(
+          `
+          SELECT provider, format, COUNT(*) AS files
+          FROM source_files
+          GROUP BY provider, format
+          ORDER BY provider, format
+        `,
+        )
+        .all() as unknown as Array<{
+        provider: unknown;
+        format: unknown;
+        files: unknown;
+      }>
+    ).map((row) => ({
+      provider: providerFrom(row.provider),
+      format: requiredString(row.format, "unknown"),
+      files: safeNumber(row.files),
+    }));
   }
 
   sessionExists(sessionId: string): boolean {

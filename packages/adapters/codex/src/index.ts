@@ -130,6 +130,24 @@ export class CodexAdapter implements SessionAdapter {
   readonly supportedFormats = [
     "Codex rollout JSONL: session_meta, turn_context, event_msg/token_count",
   ] as const;
+  readonly formatSupport = [
+    {
+      id: "codex-rollout-jsonl-v1",
+      description:
+        "Codex rollout/session JSONL with session_meta, turn_context, and token_count events",
+      validation: "local-log-validated",
+      recordMarkers: [
+        "session_meta.payload.id",
+        "turn_context.payload.model",
+        "event_msg.payload.info.total_token_usage",
+        "event_msg.payload.info.last_token_usage",
+      ],
+      limitations: [
+        "Unknown records are ignored",
+        "Provider format changes can produce partial accounting warnings",
+      ],
+    },
+  ] as const;
 
   constructor(readonly logRoot = path.join(homedir(), ".codex", "sessions")) {}
 

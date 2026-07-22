@@ -313,11 +313,23 @@ export interface SessionAdapter {
   readonly provider: Provider;
   readonly logRoot: string;
   readonly supportedFormats: readonly string[];
+  readonly formatSupport?: readonly ProviderFormatSupport[];
   discoverSourceFiles(): Promise<string[]>;
   parseFile(
     sourceFile: string,
     options?: ParseFileOptions,
   ): Promise<ParsedLogFile>;
+}
+
+export type ProviderFormatValidation =
+  "local-log-validated" | "synthetic-fixtures-only";
+
+export interface ProviderFormatSupport {
+  id: string;
+  description: string;
+  validation: ProviderFormatValidation;
+  recordMarkers: readonly string[];
+  limitations: readonly string[];
 }
 
 export interface ParseWarning {
@@ -342,6 +354,11 @@ export interface JsonlReadResult {
   malformedLines: number;
   truncated: boolean;
 }
+
+export const DEFAULT_MAX_JSONL_LINE_BYTES = 16 * 1024 * 1024;
+const FILE_CHECKPOINT_SAMPLE_BYTES = 64 * 1024;
+const FILE_CHECKPOINT_SAMPLES = 8;
+const FILE_CHECKPOINT_PREFIX = "sampled-v1";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -515,6 +532,7 @@ export async function streamJsonlRecords(
     record: JsonRecord,
     position: JsonlRecordPosition,
   ) => void | Promise<void>,
+  options: { maxLineBytes?: number } = {},
 ): Promise<JsonlReadResult> {
   const metadata = await stat(sourceFile);
   const fileSize = metadata.size;
@@ -534,45 +552,88 @@ export async function streamJsonlRecords(
     };
   }
 
+  const maximumLineBytes = Math.max(
+    1,
+    Math.trunc(options.maxLineBytes ?? DEFAULT_MAX_JSONL_LINE_BYTES),
+  );
   const stream = createReadStream(sourceFile, {
     flags: "r",
     start: safeStart,
     end: fileSize - 1,
   });
-  let buffer = Buffer.alloc(0);
+  let lineSegments: Buffer[] = [];
+  let lineBytes = 0;
   let bufferStart = safeStart;
   let processedBytes = safeStart;
   let malformedLines = 0;
+  let discardingOversizedLine = false;
+  let chunkStart = safeStart;
 
   for await (const chunk of stream) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    buffer = buffer.length === 0 ? bytes : Buffer.concat([buffer, bytes]);
+    let cursor = 0;
+    while (cursor < bytes.length) {
+      const newlineIndex = bytes.indexOf(0x0a, cursor);
+      const segmentEnd = newlineIndex < 0 ? bytes.length : newlineIndex;
+      const segment = bytes.subarray(cursor, segmentEnd);
+      if (!discardingOversizedLine) {
+        if (lineBytes + segment.length > maximumLineBytes) {
+          lineSegments = [];
+          lineBytes = 0;
+          discardingOversizedLine = true;
+        } else if (segment.length > 0) {
+          lineSegments.push(segment);
+          lineBytes += segment.length;
+        }
+      }
 
-    let newlineIndex = buffer.indexOf(0x0a);
-    while (newlineIndex >= 0) {
-      const line = buffer.subarray(0, newlineIndex);
-      const endOffset = bufferStart + newlineIndex + 1;
-      const parsed = parseJsonRecord(line);
-      if (parsed.kind === "record") {
-        await onRecord(parsed.record, {
-          startOffset: bufferStart,
-          endOffset,
-        });
-      } else if (parsed.kind === "invalid") {
+      if (newlineIndex < 0) break;
+      const endOffset = chunkStart + newlineIndex + 1;
+      if (discardingOversizedLine) {
         malformedLines += 1;
+      } else {
+        const line =
+          lineSegments.length === 1
+            ? (lineSegments[0] ?? Buffer.alloc(0))
+            : Buffer.concat(lineSegments, lineBytes);
+        const parsed = parseJsonRecord(line);
+        if (parsed.kind === "record") {
+          await onRecord(parsed.record, {
+            startOffset: bufferStart,
+            endOffset,
+          });
+        } else if (parsed.kind === "invalid") {
+          malformedLines += 1;
+        }
       }
       processedBytes = endOffset;
-      buffer = buffer.subarray(newlineIndex + 1);
+      lineSegments = [];
+      lineBytes = 0;
       bufferStart = endOffset;
-      newlineIndex = buffer.indexOf(0x0a);
+      discardingOversizedLine = false;
+      cursor = newlineIndex + 1;
     }
+    chunkStart += bytes.length;
   }
 
-  if (buffer.length === 0) {
+  if (discardingOversizedLine) {
+    return {
+      processedBytes: fileSize,
+      fileSize,
+      malformedLines: malformedLines + 1,
+      truncated: false,
+    };
+  }
+
+  if (lineBytes === 0) {
     return { processedBytes, fileSize, malformedLines, truncated: false };
   }
 
-  const trailing = parseJsonRecord(buffer);
+  const trailing = parseJsonRecord(
+    lineSegments.length === 1
+      ? (lineSegments[0] ?? Buffer.alloc(0))
+      : Buffer.concat(lineSegments, lineBytes),
+  );
   if (trailing.kind === "record") {
     await onRecord(trailing.record, {
       startOffset: bufferStart,
@@ -586,6 +647,65 @@ export async function streamJsonlRecords(
   }
 
   return { processedBytes, fileSize, malformedLines, truncated: false };
+}
+
+async function hashFileRange(
+  sourceFile: string,
+  start: number,
+  end: number,
+): Promise<string> {
+  const hash = createHash("sha256");
+  if (end <= start) return hash.digest("hex");
+  const stream = createReadStream(sourceFile, {
+    flags: "r",
+    start,
+    end: end - 1,
+  });
+  for await (const chunk of stream) hash.update(chunk as Buffer);
+  return hash.digest("hex");
+}
+
+export async function createFileCheckpoint(
+  sourceFile: string,
+  byteLength?: number,
+): Promise<string> {
+  const metadata = await stat(sourceFile);
+  const length =
+    byteLength === undefined
+      ? metadata.size
+      : Math.max(0, Math.min(metadata.size, Math.trunc(byteLength)));
+  const checkpoint = createHash("sha256");
+  checkpoint.update(FILE_CHECKPOINT_PREFIX).update("\0").update(String(length));
+  if (length === 0) {
+    return `${FILE_CHECKPOINT_PREFIX}:0:${checkpoint.digest("hex")}`;
+  }
+  const sampleSize = Math.min(FILE_CHECKPOINT_SAMPLE_BYTES, length);
+  const maximumStart = Math.max(0, length - sampleSize);
+  const starts = new Set<number>();
+  for (let index = 0; index < FILE_CHECKPOINT_SAMPLES; index += 1) {
+    starts.add(
+      Math.trunc((maximumStart * index) / (FILE_CHECKPOINT_SAMPLES - 1)),
+    );
+  }
+  for (const start of [...starts].sort((left, right) => left - right)) {
+    checkpoint
+      .update("\0")
+      .update(String(start))
+      .update("\0")
+      .update(await hashFileRange(sourceFile, start, start + sampleSize));
+  }
+  return `${FILE_CHECKPOINT_PREFIX}:${length}:${checkpoint.digest("hex")}`;
+}
+
+export async function matchesFileCheckpoint(
+  sourceFile: string,
+  byteLength: number,
+  expected: string,
+): Promise<boolean> {
+  if (expected.startsWith(`${FILE_CHECKPOINT_PREFIX}:`)) {
+    return (await createFileCheckpoint(sourceFile, byteLength)) === expected;
+  }
+  return (await hashFilePrefix(sourceFile, byteLength)) === expected;
 }
 
 export async function hashFilePrefix(

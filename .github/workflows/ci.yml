@@ -17,13 +17,13 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.15.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22.13.1
+          node-version: 22.14.0
           cache: pnpm
       - name: Prepare isolated local directories
         run: mkdir -p "$CODEOUTCOME_DATA_DIR" "$CODEOUTCOME_CLAUDE_LOG_DIR" "$CODEOUTCOME_CODEX_LOG_DIR"
@@ -32,6 +32,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
+      - run: pnpm import:large-smoke
       - run: pnpm dashboard:test
       - run: pnpm build
       - run: pnpm demo:smoke
@@ -39,13 +40,13 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.15.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22.13.1
+          node-version: 22.14.0
           cache: pnpm
       - run: mkdir -p "$CODEOUTCOME_DATA_DIR" "$CODEOUTCOME_CLAUDE_LOG_DIR" "$CODEOUTCOME_CODEX_LOG_DIR"
       - run: pnpm install --frozen-lockfile
@@ -62,16 +63,45 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.15.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22.13.1
+          node-version: 22.14.0
           cache: pnpm
       - run: mkdir -p "$CODEOUTCOME_DATA_DIR" "$CODEOUTCOME_CLAUDE_LOG_DIR" "$CODEOUTCOME_CODEX_LOG_DIR"
       - run: pnpm install --frozen-lockfile
       - run: pnpm package:pack
       - run: pnpm package:inspect
       - run: pnpm package:test-install
+      - run: pnpm package:publish-audit
+
+  linux-install:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.14.0, 24]
+    env:
+      CODEOUTCOME_DATA_DIR: /tmp/codeoutcome-linux-install
+      CODEOUTCOME_CODEX_LOG_DIR: ${{ github.workspace }}/fixtures/codex
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.15.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+      - run: mkdir -p "$CODEOUTCOME_DATA_DIR"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm package:pack
+      - name: Install the packed CLI globally
+        run: npm install --global ./artifacts/package/codeoutcome-0.1.0-alpha.2.tgz
+      - run: codeoutcome --version
+      - run: codeoutcome doctor --provider codex --json
+      - run: codeoutcome import --provider codex
+      - run: codeoutcome usage --weekly
+      - run: codeoutcome feedback --json

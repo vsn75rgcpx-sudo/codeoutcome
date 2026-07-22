@@ -8,15 +8,19 @@ Codex.
 ## Why an explicit wrapper
 
 CodeOutcome cannot safely and transparently intercept every shell command run by
-an AI coding tool. Test tracking is therefore explicit:
+an AI coding tool. Test tracking is therefore explicit. The short form treats
+everything after optional CodeOutcome flags as the test command:
 
 ```sh
-codeoutcome test run -- pytest -q
-codeoutcome test run --stage baseline -- pnpm test
-codeoutcome test run --stage final -- pnpm test
-codeoutcome test run -- cargo test
-codeoutcome test run -- go test ./...
+codeoutcome test pytest -q
+codeoutcome test --stage baseline pnpm test
+codeoutcome test --stage final pnpm test
+codeoutcome test cargo test
+codeoutcome test go test ./...
 ```
+
+The longer `codeoutcome test run [options] -- <command>` form remains available
+for scripts and for commands that need an explicit separator.
 
 The wrapper launches an executable with an argument array and `shell:false`.
 It neither builds a shell command string nor modifies test configuration,

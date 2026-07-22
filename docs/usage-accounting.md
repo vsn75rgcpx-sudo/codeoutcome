@@ -99,13 +99,17 @@ fixture before its results can be considered reliable.
 ## Incremental and idempotent imports
 
 - JSONL is streamed by bytes and lines. The importer never loads the whole file.
+  An individual line is capped at 16 MiB; an oversized line is discarded and
+  counted as malformed rather than growing memory without a bound.
 - Each completed record is identified by provider, canonical source path, byte
   offset, and event type.
 - The checkpoint advances only through complete JSON or harmless blank lines.
   An invalid final partial line is retained for the next append.
-- Unchanged files are skipped. Appended files are read from the verified byte
-  checkpoint. Changed prefixes and shorter files are re-read, and only that
-  source's previous events are replaced.
+- Unchanged size/mtime pairs are skipped. Same-size changed files and shorter
+  files are fully re-read, and only that source's previous events are replaced.
+  Appended files are read from the previous completed byte offset after checking
+  eight fixed-size samples of the old prefix. This keeps append verification
+  bounded instead of hashing a multi-gigabyte history on every import.
 - Source and event updates occur in SQLite transactions with foreign keys
   enabled. WAL is used for normal writable databases.
 
@@ -148,6 +152,11 @@ statement.
 - Missing-ID sessions are path-stable, not content-stable, when files move.
 - Cross-file duplicate detection uses a Provider event ID when one exists.
   Formats without that ID cannot reliably identify copied incremental events.
+- Append verification samples the previous prefix rather than hashing every old
+  byte. A file that is modified only between all sample windows and then
+  appended could evade rewrite detection. Normal Provider append behavior is
+  covered; use an isolated fresh data directory when auditing an externally
+  edited log.
 - Source logs may omit cached-token or cost fields. CodeOutcome does not infer
   values that are absent.
 - The database stores canonical local paths internally even though CLI output
